@@ -42,6 +42,21 @@ type UserBasicInfo struct {
 	Numero   string `json:"numero"`
 	Nombre   string `json:"nombre"`
 	Apellido string `json:"apellido"`
+	FriendId string `json:"friend_id"`
+}
+
+type UserFriend struct {
+	ID                 string `json:"id"`
+	FriendID          string `json:"friend_id"`
+	Nombre             string `json:"nombre"`
+	Apellido           string `json:"apellido"`
+	PendingID *string `json:"pending_id,omitempty"`
+	Slogan             string `json:"slogan"`
+	Cabello            string `json:"cabello"`
+	Vestimenta         string `json:"vestimenta"`
+	Barba              string `json:"barba"`
+	DetalleFacial      string `json:"detalle_facial"`
+	DetalleAdicional   string `json:"detalle_adicional"`
 }
 
 type UserStats struct {
@@ -55,4 +70,5 @@ type UserStats struct {
 	EsDuenoTorneo    bool    `json:"es_dueno_torneo"`
 	PendingMedalla   int     `json:"pending_medalla"`
 	PendingAmigo     int     `json:"pending_amigo"`
+	TorneoId         *string  `json:"torneo_id"`
 }

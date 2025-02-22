@@ -4,6 +4,7 @@ import "time"
 
 type Torneo struct {
 	ID                  string    `json:"id"`
+	IDCreator           string    `json:"id_creator"`
 	Nombre              string    `json:"nombre"`
 	Modalidad           string    `json:"modalidad"`
 	UbicacionALatitud   float64   `json:"ubicacion_a_latitud"`
@@ -15,8 +16,9 @@ type Torneo struct {
 	FechaInicio         time.Time `json:"fecha_inicio"`
 	FechaFin            time.Time `json:"fecha_fin"`
 	UbicacionAproximada bool      `json:"ubicacion_aproximada"`
-	KilometrosAprox     *int      `json:"kilometros_aproximados,omitempty"`
+	MetrosAprox         *int      `json:"metros_aproximados,omitempty"`
 	Finalizado          bool      `json:"finalizado"`
+	CodeID              string    `json:"code_id"`
 	GanadorVersus       *bool     `json:"ganador_versus,omitempty"`
 	GanadorIndividual   *string   `json:"ganador_individual,omitempty"`
 }
@@ -28,4 +30,5 @@ type TorneoEstadisticas struct {
 	IDTorneo   string `json:"id_torneo"`
 	Modalidad  string `json:"modalidad"`
 	Puntos     int    `json:"puntos"`
+	Habilitado bool   `json:"habilitado"`
 } 

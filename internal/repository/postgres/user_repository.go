@@ -2,6 +2,7 @@ package postgres
 
 import (
 	"backend_proyecto_verde/internal/models"
+	"backend_proyecto_verde/internal/utils"
 	"database/sql"
 	"errors"
 	"fmt"
@@ -94,8 +95,8 @@ func (r *UserRepository) ReLoginUserByID(id string) (*models.LoginUserAccess, er
 	)`
 
 	userChecked := models.LoginUserAccess{
-		ID: user.ID,
-		Username: user.Username,
+		ID:                    user.ID,
+		Username:              user.Username,
 		IsPersonalInformation: false,
 	}
 
@@ -147,8 +148,8 @@ func (r *UserRepository) GetUserByUsernameAndPassword(username string, password 
 	)`
 
 	userChecked := models.LoginUserAccess{
-		ID: user.ID,
-		Username: user.Username,
+		ID:                    user.ID,
+		Username:              user.Username,
 		IsPersonalInformation: false,
 	}
 
@@ -171,7 +172,7 @@ func (r *UserRepository) UpdateUser(user *models.UserAccess) error {
 	return err
 }
 
-func (r *UserRepository) CreateUserBasicInfo(user *models.UserBasicInfo) (error) {
+func (r *UserRepository) CreateUserBasicInfo(user *models.UserBasicInfo) error {
 	query := `
 		INSERT INTO user_basic_info (user_id, numero, nombre, apellido)
 		VALUES ($1, $2, $3, $4)
@@ -184,30 +185,44 @@ func (r *UserRepository) CreateUserBasicInfo(user *models.UserBasicInfo) (error)
 
 func (r *UserRepository) GetUserBasicInfo(user *models.UserBasicInfo) (*models.UserBasicInfo, error) {
 	query := `
-		SELECT id, user_id, numero, nombre, apellido
+		SELECT id, user_id, numero, nombre, apellido, friend_id
 		FROM user_basic_info
 		WHERE user_id = $1`
 
 	var userBasicInfo models.UserBasicInfo
-	err := r.db.QueryRow(query, user.UserID).Scan(&userBasicInfo.ID, &userBasicInfo.UserID, &userBasicInfo.Numero, &userBasicInfo.Nombre, &userBasicInfo.Apellido)
+	err := r.db.QueryRow(query, user.UserID).Scan(&userBasicInfo.ID, &userBasicInfo.UserID, &userBasicInfo.Numero, &userBasicInfo.Nombre, &userBasicInfo.Apellido, &userBasicInfo.FriendId)
 	if err != nil {
 		return nil, err
 	}
 
-
-
 	return &userBasicInfo, nil
 }
 
-func (r *UserRepository) CreateOrUpdateUserBasicInfo(user *models.UserBasicInfo) (error) {
-	query := `
-		INSERT INTO user_basic_info (user_id, numero, nombre, apellido)
-		VALUES ($1, $2, $3, $4)
-		ON CONFLICT (user_id) DO UPDATE
-		SET numero = $2, nombre = $3, apellido = $4`
+func (r *UserRepository) CreateOrUpdateUserBasicInfo(user *models.UserBasicInfo) error {
+	var exists bool
 
-	_, err := r.db.Exec(query,
-		user.UserID, user.Numero, user.Nombre, user.Apellido,
+	checkQuery := `
+		SELECT EXISTS (
+			SELECT 1 FROM user_basic_info WHERE user_id = $1
+		)`
+	err := r.db.QueryRow(checkQuery, user.UserID).Scan(&exists)
+	if err != nil {
+		return err
+	}
+
+	if !exists {
+		friendId := utils.GenerateUniqueFriendId(r.db, false)
+		user.FriendId = friendId
+	}
+
+	query := `
+		INSERT INTO user_basic_info (user_id, numero, nombre, apellido, friend_id)
+		VALUES ($1, $2, $3, $4, $5)
+		ON CONFLICT (user_id) DO UPDATE
+		SET nombre = $3, apellido = $4`
+
+	_, err = r.db.Exec(query,
+		user.UserID, user.Numero, user.Nombre, user.Apellido, user.FriendId,
 	)
 	return err
 
@@ -235,13 +250,13 @@ func (r *UserRepository) GetUserProfile(userID string) (*models.UserProfile, err
 func (r *UserRepository) UpdateUserProfile(profile *models.UserProfile) error {
 
 	query := `
-		INSERT INTO user_profile (user_id, cabello, vestimenta, barba, detalle_facial, detalle_adicional)
-		VALUES ($1, $2, $3, $4, $5, $6)
+		INSERT INTO user_profile (user_id, slogan, cabello, vestimenta, barba, detalle_facial, detalle_adicional)
+		VALUES ($1, $2, $3, $4, $5, $6, $7)
 		ON CONFLICT (user_id) DO UPDATE
-		SET cabello = $2, vestimenta = $3, barba = $4, detalle_facial = $5, detalle_adicional = $6`
+		SET slogan = $2, cabello = $3, vestimenta = $4, barba = $5, detalle_facial = $6, detalle_adicional = $7`
 
 	_, err := r.db.Exec(query,
-		profile.UserID, profile.Cabello, profile.Vestimenta,
+		profile.UserID, profile.Slogan, profile.Cabello, profile.Vestimenta,
 		profile.Barba, profile.DetalleFacial, profile.DetalleAdicional,
 	)
 	return err
@@ -249,7 +264,7 @@ func (r *UserRepository) UpdateUserProfile(profile *models.UserProfile) error {
 }
 
 func (r *UserRepository) EditUserProfile(profile *models.EditProfile) error {
-	
+
 	query := `
 		UPDATE user_profile
 		SET slogan = $2
@@ -302,7 +317,7 @@ func (r *UserRepository) UpdateUserStats(stats *models.UserStats) error {
 		) VALUES ($1, $2, $3, $4, $5, $6)
 		ON CONFLICT (user_id) DO UPDATE
 		SET puntos = $2, acciones = $3, torneos_participados = $4, cantidad_amigos = $5,
-			es_dueno_torneo = $6, latitud = $7, longitud = $8
+			es_dueno_torneo = $6
 	`
 
 	_, err := r.db.Exec(query,
@@ -321,11 +336,9 @@ func (r *UserRepository) UpdateUserPendingMedalla(pending int, userID string) er
 			user_id, pending_medalla
 		) VALUES ($1, $2)
 		ON CONFLICT (user_id) DO UPDATE
-		SET pending_medalla = $2`
+		SET pending_medalla = user_stats.pending_medalla + $2`
 
-	_, err := r.db.Exec(query,
-		userID, pending,
-	)
+	_, err := r.db.Exec(query, userID, pending)
 	if err != nil {
 		fmt.Println("SQL Execution Error:", err)
 	}
@@ -344,4 +357,58 @@ func (r *UserRepository) UpdateUserPendingAmigo(pending int, userID string) erro
 		userID, pending,
 	)
 	return err
-}	
+}
+
+func (r *UserRepository) GetRanking() ([]models.UserRanking, error) {
+	query := `
+		SELECT 
+			us.user_id,
+			us.puntos,
+			us.acciones,
+			us.torneos_ganados,
+			us.cantidad_amigos,
+			up.slogan,
+			up.cabello,
+			up.vestimenta,
+			up.barba,
+			up.detalle_facial,
+			up.detalle_adicional,
+			ub.nombre,
+			ub.apellido
+		FROM user_stats us
+		LEFT JOIN user_profile up ON us.user_id = up.user_id
+		LEFT JOIN user_basic_info ub ON us.user_id = ub.user_id
+		ORDER BY us.puntos DESC`
+
+	rows, err := r.db.Query(query)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var ranking []models.UserRanking
+	for rows.Next() {
+		var r models.UserRanking
+		err := rows.Scan(
+			&r.UserID,
+			&r.Puntos,
+			&r.Acciones,
+			&r.TorneosGanados,
+			&r.CantidadAmigos,
+			&r.Slogan,
+			&r.Cabello,
+			&r.Vestimenta,
+			&r.Barba,
+			&r.DetalleFacial,
+			&r.DetalleAdicional,
+			&r.Nombre,
+			&r.Apellido,
+		)
+		if err != nil {
+			return nil, err
+		}
+		ranking = append(ranking, r)
+	}
+
+	return ranking, nil
+}

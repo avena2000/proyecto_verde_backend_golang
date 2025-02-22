@@ -28,9 +28,9 @@ func NewUserActionsRepository(db *sql.DB) *UserActionsRepository {
 func (r *UserActionsRepository) CreateAction(action *models.UserAction) error {
 	query := `
 		INSERT INTO user_actions (
-			user_id, tipo_accion, foto, latitud, longitud,
+			user_id, tipo_accion, foto, latitud, longitud, ciudad, lugar,
 			en_colaboracion, colaboradores, es_para_torneo, id_torneo
-		) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+		) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
 		RETURNING id, created_at`
 
 	err := r.db.QueryRow(
@@ -40,6 +40,8 @@ func (r *UserActionsRepository) CreateAction(action *models.UserAction) error {
 		action.Foto,
 		action.Latitud,
 		action.Longitud,
+		action.Ciudad,
+		action.Lugar,
 		action.EnColaboracion,
 		pq.Array(action.Colaboradores),
 		action.EsParaTorneo,
@@ -140,17 +142,16 @@ func (r *UserActionsRepository) UploadImage(file multipart.File) (string, error)
 	return imageURL, nil
 }
 
-func (r *UserActionsRepository) GetUserActions(userID string, limit, offset int) ([]models.UserAction, error) {
+func (r *UserActionsRepository) GetUserActions(userID string) ([]models.UserAction, error) {
 	query := `
-		SELECT id, user_id, tipo_accion, foto, latitud, longitud,
+		SELECT id, user_id, tipo_accion, foto, latitud, longitud, ciudad, lugar,
 			en_colaboracion, colaboradores, es_para_torneo, id_torneo,
 			created_at
 		FROM user_actions
 		WHERE user_id = $1 AND deleted_at IS NULL
-		ORDER BY created_at DESC
-		LIMIT $2 OFFSET $3`
+		ORDER BY created_at DESC`
 
-	rows, err := r.db.Query(query, userID, limit, offset)
+	rows, err := r.db.Query(query, userID)
 	if err != nil {
 		return nil, err
 	}
@@ -159,14 +160,18 @@ func (r *UserActionsRepository) GetUserActions(userID string, limit, offset int)
 	var actions []models.UserAction
 	for rows.Next() {
 		var a models.UserAction
+		var colaboradores []string
 		err := rows.Scan(
 			&a.ID, &a.UserID, &a.TipoAccion, &a.Foto,
-			&a.Latitud, &a.Longitud, &a.EnColaboracion,
-			&a.Colaboradores, &a.EsParaTorneo, &a.IDTorneo,
+			&a.Latitud, &a.Longitud, &a.Ciudad, &a.Lugar,
+			&a.EnColaboracion, pq.Array(&colaboradores), &a.EsParaTorneo, &a.IDTorneo,
 			&a.CreatedAt,
 		)
 		if err != nil {
 			return nil, err
+		}
+		if len(colaboradores) > 0 {
+			a.Colaboradores = &colaboradores
 		}
 		actions = append(actions, a)
 	}
@@ -194,4 +199,73 @@ func (r *UserActionsRepository) SoftDeleteAction(id string) error {
 	}
 
 	return nil
+}
+
+func (r *UserActionsRepository) GetActionByID(id string) (*models.UserAction, error) {
+	var action models.UserAction
+	query := `SELECT id, user_id, tipo_accion FROM user_actions WHERE id = $1 AND deleted_at IS NULL`
+	err := r.db.QueryRow(query, id).Scan(&action.ID, &action.UserID, &action.TipoAccion)
+	if err != nil {
+		return nil, err
+	}
+	return &action, nil
+}
+
+func (r *UserActionsRepository) DecrementUserPoints(userID string, tipoAccion string) error {
+	var query string
+	switch tipoAccion {
+	case "ayuda":
+		query = `UPDATE user_stats SET puntos = puntos - 50 WHERE user_id = $1`
+	case "alerta":
+		query = `UPDATE user_stats SET puntos = puntos - 40 WHERE user_id = $1`
+	case "descubrimiento":
+		query = `UPDATE user_stats SET puntos = puntos - 25 WHERE user_id = $1`
+	default:
+		return fmt.Errorf("tipo de acción no válido")
+	}
+
+	_, err := r.db.Exec(query, userID)
+	return err
+}
+
+func (r *UserActionsRepository) DecrementTotalActions(userID string) error {
+	query := `UPDATE user_stats SET acciones = acciones - 1 WHERE user_id = $1`
+	_, err := r.db.Exec(query, userID)
+	return err
+}
+
+func (r *UserActionsRepository) GetAllActions() ([]models.UserAction, error) {
+	query := `
+		SELECT id, user_id, tipo_accion, foto, latitud, longitud, ciudad, lugar,
+			en_colaboracion, colaboradores, es_para_torneo, id_torneo,
+			created_at
+		FROM user_actions
+		WHERE deleted_at IS NULL
+		ORDER BY created_at DESC`
+
+	rows, err := r.db.Query(query)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var actions []models.UserAction
+	for rows.Next() {
+		var a models.UserAction
+		var colaboradores []string
+		err := rows.Scan(
+			&a.ID, &a.UserID, &a.TipoAccion, &a.Foto,
+			&a.Latitud, &a.Longitud, &a.Ciudad, &a.Lugar,
+			&a.EnColaboracion, pq.Array(&colaboradores), &a.EsParaTorneo, &a.IDTorneo,
+			&a.CreatedAt,
+		)
+		if err != nil {
+			return nil, err
+		}
+		if len(colaboradores) > 0 {
+			a.Colaboradores = &colaboradores
+		}
+		actions = append(actions, a)
+	}
+	return actions, nil
 }

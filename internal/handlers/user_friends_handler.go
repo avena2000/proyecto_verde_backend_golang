@@ -4,6 +4,7 @@ import (
 	"backend_proyecto_verde/internal/repository/postgres"
 	"database/sql"
 	"encoding/json"
+	"errors"
 	"net/http"
 
 	"github.com/gorilla/mux"
@@ -20,9 +21,29 @@ func NewUserFriendsHandler(repo *postgres.UserFriendsRepository) *UserFriendsHan
 func (h *UserFriendsHandler) SendFriendRequest(w http.ResponseWriter, r *http.Request) {
 	vars := mux.Vars(r)
 	userID := vars["user_id"]
-	friendID := vars["friend_id"]
 
-	if err := h.repo.SendFriendRequest(userID, friendID); err != nil {
+	var friendIDRequest struct {
+		ID string `json:"friend_id_request"`
+	}
+
+	if err := json.NewDecoder(r.Body).Decode(&friendIDRequest); err != nil {
+		http.Error(w, "Error al decodificar el cuerpo de la solicitud", http.StatusBadRequest)
+		return
+	}
+
+	if err := h.repo.SendFriendRequest(userID, friendIDRequest.ID); err != nil {
+		if err == sql.ErrNoRows {
+			http.Error(w, "El usuario no existe", http.StatusNotFound)
+			return
+		}
+		if errors.Is(err, postgres.ErrSelfFriendRequest) {
+			http.Error(w, err.Error(), http.StatusConflict)
+			return
+		}
+		if errors.Is(err, postgres.ErrFriendRequestExists) {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
@@ -72,4 +93,4 @@ func (h *UserFriendsHandler) RemoveFriend(w http.ResponseWriter, r *http.Request
 	}
 
 	w.WriteHeader(http.StatusNoContent)
-} 
+}

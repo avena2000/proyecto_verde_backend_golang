@@ -38,15 +38,15 @@ func (h *UserHandler) CreateUser(w http.ResponseWriter, r *http.Request) {
 	}
 
 	stats := models.UserStats{
-		UserID: user.ID,
-		Puntos: 0,
-		Acciones: 0,
+		UserID:              user.ID,
+		Puntos:              0,
+		Acciones:            0,
 		TorneosParticipados: 0,
-		CantidadAmigos: 0,
-		EsDuenoTorneo: false,
-		TorneosGanados: 0,
-		PendingMedalla: 0,
-		PendingAmigo: 0,
+		CantidadAmigos:      0,
+		EsDuenoTorneo:       false,
+		TorneosGanados:      0,
+		PendingMedalla:      0,
+		PendingAmigo:        0,
 	}
 
 	if err := h.repo.UpdateUserStats(&stats); err != nil {
@@ -55,15 +55,14 @@ func (h *UserHandler) CreateUser(w http.ResponseWriter, r *http.Request) {
 	}
 
 	profile := models.UserProfile{
-		UserID: user.ID,
-		Slogan: "¡Bienvenido Eco-Warrior!",
-		Cabello: "default",
-		Vestimenta: "default",
-		Barba: "0",
-	    DetalleFacial: "0",
+		UserID:           user.ID,
+		Slogan:           "ViVe tu mejor vida",
+		Cabello:          "default",
+		Vestimenta:       "default",
+		Barba:            "0",
+		DetalleFacial:    "0",
 		DetalleAdicional: "0",
 	}
-
 
 	if err := h.repo.UpdateUserProfile(&profile); err != nil {
 		http.Error(w, err.Error(), http.StatusConflict)
@@ -183,7 +182,6 @@ func (h *UserHandler) ReLoginUser(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(user)
 }
 
-
 func (h *UserHandler) UpdateUser(w http.ResponseWriter, r *http.Request) {
 	vars := mux.Vars(r)
 	id := vars["id"]
@@ -290,4 +288,15 @@ func (h *UserHandler) UpdateUserStats(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(stats)
+}
+
+func (h *UserHandler) GetRanking(w http.ResponseWriter, r *http.Request) {
+	ranking, err := h.repo.GetRanking()
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(ranking)
 }

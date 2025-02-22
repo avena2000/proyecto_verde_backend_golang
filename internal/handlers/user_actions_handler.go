@@ -3,6 +3,7 @@ package handlers
 import (
 	"backend_proyecto_verde/internal/models"
 	"backend_proyecto_verde/internal/repository/postgres"
+	"backend_proyecto_verde/internal/utils"
 	"database/sql"
 	"encoding/json"
 	"net/http"
@@ -69,12 +70,21 @@ func (h *UserActionsHandler) CreateAction(w http.ResponseWriter, r *http.Request
 		return
 	}
 
+	lugar, ciudad, err := utils.ReverseGeocodeWithCity(latitud, longitud)
+
+	if err != nil {
+		http.Error(w, "Error al obtener la ciudad", http.StatusInternalServerError)
+		return
+	}
+
 	action := models.UserAction{
 		UserID:         userID,
 		TipoAccion:     tipoAccion,
 		Latitud:        latitudFloat,
 		Longitud:       longitudFloat,
 		Foto:           imageURL,
+		Ciudad:         ciudad,
+		Lugar:          lugar,
 		EnColaboracion: false,
 		EsParaTorneo:   false,
 	}
@@ -100,14 +110,7 @@ func (h *UserActionsHandler) GetUserActions(w http.ResponseWriter, r *http.Reque
 	vars := mux.Vars(r)
 	userID := vars["user_id"]
 
-	limit, _ := strconv.Atoi(r.URL.Query().Get("limit"))
-	offset, _ := strconv.Atoi(r.URL.Query().Get("offset"))
-
-	if limit <= 0 {
-		limit = 10
-	}
-
-	actions, err := h.repo.GetUserActions(userID, limit, offset)
+	actions, err := h.repo.GetUserActions(userID)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
@@ -121,7 +124,9 @@ func (h *UserActionsHandler) DeleteAction(w http.ResponseWriter, r *http.Request
 	vars := mux.Vars(r)
 	id := vars["id"]
 
-	if err := h.repo.SoftDeleteAction(id); err != nil {
+	// Obtener la acción antes de eliminarla para saber el tipo y el userID
+	action, err := h.repo.GetActionByID(id)
+	if err != nil {
 		if err == sql.ErrNoRows {
 			http.Error(w, "Acción no encontrada", http.StatusNotFound)
 			return
@@ -130,5 +135,40 @@ func (h *UserActionsHandler) DeleteAction(w http.ResponseWriter, r *http.Request
 		return
 	}
 
+	// Eliminar la acción de manera lógica
+	if err := h.repo.SoftDeleteAction(id); err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	// Restar los puntos correspondientes al tipo de acción
+	if err := h.repo.DecrementUserPoints(action.UserID, action.TipoAccion); err != nil {
+		http.Error(w, "Error al actualizar los puntos del usuario", http.StatusInternalServerError)
+		return
+	}
+
+	// Decrementar el contador total de acciones del usuario
+	if err := h.repo.DecrementTotalActions(action.UserID); err != nil {
+		http.Error(w, "Error al actualizar el total de acciones", http.StatusInternalServerError)
+		return
+	}
+
+	// Verificar y actualizar las medallas del usuario
+	if err := h.medallasRepo.VerifyAndUpdateMedallas(action.UserID); err != nil {
+		http.Error(w, "Error al verificar las medallas del usuario", http.StatusInternalServerError)
+		return
+	}
+
 	w.WriteHeader(http.StatusNoContent)
+}
+
+func (h *UserActionsHandler) GetAllActions(w http.ResponseWriter, r *http.Request) {
+	actions, err := h.repo.GetAllActions()
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(actions)
 }

@@ -34,11 +34,16 @@ func SetupRoutes(
 	r.HandleFunc("/api/users/{id}/profile/edit", userHandler.UpdateUserProfileEdit).Methods("PUT")
 	r.HandleFunc("/api/users/{id}/stats", userHandler.GetUserStats).Methods("GET")
 	r.HandleFunc("/api/users/{id}/stats", userHandler.UpdateUserStats).Methods("PUT")
+	r.HandleFunc("/api/ranking", userHandler.GetRanking).Methods("GET")
 
 	// Rutas de torneos
 	r.HandleFunc("/api/torneos", torneoHandler.CreateTorneo).Methods("POST")
 	r.HandleFunc("/api/torneos", torneoHandler.ListTorneos).Methods("GET")
 	r.HandleFunc("/api/torneos/{id}", torneoHandler.GetTorneo).Methods("GET")
+	r.HandleFunc("/api/torneos/admin/{id}", torneoHandler.GetTorneoAdmin).Methods("GET")
+	r.HandleFunc("/api/torneos/admin/{id}/terminar", torneoHandler.TerminarTorneo).Methods("POST")
+	r.HandleFunc("/api/torneos/admin/{id}/borrar", torneoHandler.BorrarTorneo).Methods("POST")
+	r.HandleFunc("/api/torneos/inscribir/{code_id}", torneoHandler.InscribirUsuario).Methods("POST")
 	r.HandleFunc("/api/torneos/{id}", torneoHandler.UpdateTorneo).Methods("PUT")
 	r.HandleFunc("/api/torneos/{id}/estadisticas", torneoHandler.GetTorneoStats).Methods("GET")
 
@@ -46,10 +51,11 @@ func SetupRoutes(
 	r.HandleFunc("/api/users/{user_id}/actions", userActionsHandler.CreateAction).Methods("POST")
 	r.HandleFunc("/api/users/{user_id}/actions", userActionsHandler.GetUserActions).Methods("GET")
 	r.HandleFunc("/api/actions/{id}", userActionsHandler.DeleteAction).Methods("DELETE")
+	r.HandleFunc("/api/actions", userActionsHandler.GetAllActions).Methods("GET")
 
 	// Rutas de amigos
 	r.HandleFunc("/api/users/{user_id}/friends", userFriendsHandler.GetFriendsList).Methods("GET")
-	r.HandleFunc("/api/users/{user_id}/friends/{friend_id}", userFriendsHandler.SendFriendRequest).Methods("POST")
+	r.HandleFunc("/api/users/{user_id}/friends/add", userFriendsHandler.SendFriendRequest).Methods("POST")
 	r.HandleFunc("/api/users/{user_id}/friends/{friend_id}/accept", userFriendsHandler.AcceptFriendRequest).Methods("PUT")
 	r.HandleFunc("/api/users/{user_id}/friends/{friend_id}", userFriendsHandler.RemoveFriend).Methods("DELETE")
 
@@ -58,6 +64,8 @@ func SetupRoutes(
 	r.HandleFunc("/api/medallas", medallasHandler.GetMedallas).Methods("GET")
 	r.HandleFunc("/api/users/{user_id}/medallas", medallasHandler.GetMedallasUsuario).Methods("GET")
 	r.HandleFunc("/api/users/{user_id}/medallas/{medalla_id}", medallasHandler.AsignarMedalla).Methods("POST")
+	r.HandleFunc("/api/users/{user_id}/medallas/slogans", medallasHandler.GetSlogansMedallasGanadas).Methods("GET")
+	r.HandleFunc("/api/users/{user_id}/medallas/reset-pending", medallasHandler.ResetPendingMedallas).Methods("GET")
 
 	return r
 }

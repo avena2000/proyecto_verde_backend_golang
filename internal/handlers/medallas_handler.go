@@ -4,8 +4,9 @@ import (
 	"backend_proyecto_verde/internal/models"
 	"backend_proyecto_verde/internal/repository/postgres"
 	"encoding/json"
-	"github.com/gorilla/mux"
 	"net/http"
+
+	"github.com/gorilla/mux"
 )
 
 type MedallasHandler struct {
@@ -69,4 +70,30 @@ func (h *MedallasHandler) GetMedallasUsuario(w http.ResponseWriter, r *http.Requ
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(medallas)
-} 
+}
+
+func (h *MedallasHandler) GetSlogansMedallasGanadas(w http.ResponseWriter, r *http.Request) {
+	vars := mux.Vars(r)
+	userID := vars["user_id"]
+
+	slogans, err := h.repo.GetSlogansMedallasGanadas(userID)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(slogans)
+}
+
+func (h *MedallasHandler) ResetPendingMedallas(w http.ResponseWriter, r *http.Request) {
+	vars := mux.Vars(r)
+	userID := vars["user_id"]
+
+	if err := h.repo.ResetPendingMedallas(userID); err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	w.WriteHeader(http.StatusOK)
+}

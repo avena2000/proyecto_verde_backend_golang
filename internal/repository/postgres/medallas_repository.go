@@ -7,7 +7,7 @@ import (
 )
 
 type MedallasRepository struct {
-	db *sql.DB
+	db            *sql.DB
 	userStatsRepo *UserRepository
 }
 
@@ -38,7 +38,7 @@ func (r *MedallasRepository) CreateMedalla(medalla *models.Medalla) error {
 	).Scan(&medalla.ID)
 }
 
-func (r *MedallasRepository) AutoAsignMedallas(userID string) (error) {
+func (r *MedallasRepository) AutoAsignMedallas(userID string) error {
 	// Obtener todas las medallas
 	query := `SELECT id, nombre, descripcion, dificultad, requiere_amistades, requiere_puntos,
               requiere_acciones, requiere_torneos, requiere_victoria_torneos, numero_requerido
@@ -133,7 +133,6 @@ func cumpleRequisitos(m models.Medalla, userStats models.UserStats) bool {
 	return false
 }
 
-
 func (r *MedallasRepository) GetMedallas() ([]models.Medalla, error) {
 	query := `SELECT * FROM medallas`
 
@@ -193,4 +192,170 @@ func (r *MedallasRepository) GetMedallasUsuario(userID string) ([]models.Medalla
 		medallas = append(medallas, m)
 	}
 	return medallas, nil
-} 
+}
+
+func (r *MedallasRepository) VerifyAndUpdateMedallas(userID string) error {
+	// Primero obtenemos las estadísticas actuales del usuario
+	var stats struct {
+		Puntos   int
+		Acciones int
+	}
+
+	err := r.db.QueryRow(`
+		SELECT puntos, acciones 
+		FROM user_stats 
+		WHERE user_id = $1
+	`, userID).Scan(&stats.Puntos, &stats.Acciones)
+
+	if err != nil {
+		return err
+	}
+
+	// Comenzar una transacción
+	tx, err := r.db.Begin()
+	if err != nil {
+		return err
+	}
+
+	defer tx.Rollback() // Se ejecuta si hay un error en cualquier parte
+
+	// Verificar y posiblemente eliminar medallas de puntos
+	if err = r.verifyPointsMedals(tx, userID, stats.Puntos); err != nil {
+		return err
+	}
+
+	// Verificar y posiblemente eliminar medallas de acciones
+	if err = r.verifyActionsMedals(tx, userID, stats.Acciones); err != nil {
+		return err
+	}
+
+	return tx.Commit()
+}
+
+func (r *MedallasRepository) verifyPointsMedals(tx *sql.Tx, userID string, currentPoints int) error {
+	// Obtener todas las medallas de puntos del usuario
+	rows, err := tx.Query(`
+		SELECT m.id, m.numero_requerido 
+		FROM medallas_ganadas mg
+		JOIN medallas m ON mg.id_medalla = m.id
+		WHERE mg.id_usuario = $1 AND m.requiere_puntos = true
+	`, userID)
+	if err != nil {
+		return err
+	}
+	defer rows.Close()
+
+	// Lista para almacenar las medallas que deben eliminarse
+	var toDelete []string
+
+	for rows.Next() {
+		var medallaID string
+		var puntosRequeridos int
+		if err := rows.Scan(&medallaID, &puntosRequeridos); err != nil {
+			return err
+		}
+
+		// Si ya no cumple con los puntos requeridos, agregar a la lista de eliminaciones
+		if currentPoints < puntosRequeridos {
+			toDelete = append(toDelete, medallaID)
+		}
+	}
+	// Verificar si hubo errores en la iteración de `rows`
+	if err := rows.Err(); err != nil {
+		return err
+	}
+
+	// Ejecutar las eliminaciones después de procesar todas las filas
+	query := `DELETE FROM medallas_ganadas WHERE id_usuario = $1 AND id_medalla = $2`
+	for _, medallaID := range toDelete {
+		if _, err := tx.Exec(query, userID, medallaID); err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+func (r *MedallasRepository) verifyActionsMedals(tx *sql.Tx, userID string, currentActions int) error {
+	// Obtener todas las medallas de acciones del usuario
+	rows, err := tx.Query(`
+		SELECT m.id, m.numero_requerido
+		FROM medallas_ganadas mg
+		JOIN medallas m ON mg.id_medalla = m.id
+		WHERE mg.id_usuario = $1 AND m.requiere_acciones = true
+	`, userID)
+	if err != nil {
+		return err
+	}
+	defer rows.Close()
+
+	// Lista para almacenar las medallas que deben eliminarse
+	var toDelete []string
+
+	for rows.Next() {
+		var medallaID string
+		var accionesRequeridas int
+		if err := rows.Scan(&medallaID, &accionesRequeridas); err != nil {
+			return err
+		}
+
+		// Si ya no cumple con las acciones requeridas, agregar a la lista de eliminaciones
+		if currentActions < accionesRequeridas {
+			toDelete = append(toDelete, medallaID)
+		}
+	}
+
+	// Verificar si hubo errores en la iteración de `rows`
+	if err := rows.Err(); err != nil {
+		return err
+	}
+
+	// Ejecutar las eliminaciones después de procesar todas las filas
+	query := `DELETE FROM medallas_ganadas WHERE id_usuario = $1 AND id_medalla = $2`
+	for _, medallaID := range toDelete {
+		if _, err := tx.Exec(query, userID, medallaID); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func (r *MedallasRepository) GetSlogansMedallasGanadas(userID string) ([]string, error) {
+	query := `
+		SELECT m.nombre 
+		FROM medallas_ganadas mg
+		JOIN medallas m ON mg.id_medalla = m.id
+		WHERE mg.id_usuario = $1
+		ORDER BY mg.fecha_ganada DESC`
+
+	rows, err := r.db.Query(query, userID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var slogans []string
+	for rows.Next() {
+		var nombre string
+		if err := rows.Scan(&nombre); err != nil {
+			return nil, err
+		}
+		slogans = append(slogans, nombre)
+	}
+
+	if err = rows.Err(); err != nil {
+		return nil, err
+	}
+
+	return slogans, nil
+}
+
+func (r *MedallasRepository) ResetPendingMedallas(userID string) error {
+	query := `
+		UPDATE user_stats 
+		SET pending_medalla = 0 
+		WHERE user_id = $1`
+
+	_, err := r.db.Exec(query, userID)
+	return err
+}
