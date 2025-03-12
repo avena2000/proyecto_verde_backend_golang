@@ -5,7 +5,6 @@ import (
 	"backend_proyecto_verde/internal/repository/postgres"
 	"backend_proyecto_verde/internal/utils"
 	"database/sql"
-	"encoding/json"
 	"net/http"
 	"strconv"
 
@@ -30,21 +29,21 @@ func (h *UserActionsHandler) CreateAction(w http.ResponseWriter, r *http.Request
 
 	// Parsear el formulario multipart con un límite de 10MB
 	if err := r.ParseMultipartForm(10 << 20); err != nil {
-		http.Error(w, "Error al procesar el formulario", http.StatusBadRequest)
+		utils.RespondWithBadRequest(w, "Error al procesar el formulario", err.Error())
 		return
 	}
 
 	// Obtener la imagen del formulario
 	file, _, err := r.FormFile("imagen")
 	if err != nil && err != http.ErrMissingFile {
-		http.Error(w, "Error al obtener la imagen", http.StatusBadRequest)
+		utils.RespondWithBadRequest(w, "Error al obtener la imagen", err.Error())
 		return
 	}
 
 	// Subir la imagen usando el repositorio
 	imageURL, err := h.repo.UploadImage(file)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		utils.RespondWithInternalServerError(w, err.Error(), "Error al subir la imagen")
 		return
 	}
 
@@ -60,20 +59,20 @@ func (h *UserActionsHandler) CreateAction(w http.ResponseWriter, r *http.Request
 
 	latitudFloat, err := strconv.ParseFloat(latitud, 64)
 	if err != nil {
-		http.Error(w, "Error al convertir la latitud a float", http.StatusBadRequest)
+		utils.RespondWithBadRequest(w, "Latitud inválida", err.Error())
 		return
 	}
 
 	longitudFloat, err := strconv.ParseFloat(longitud, 64)
 	if err != nil {
-		http.Error(w, "Error al convertir la longitud a float", http.StatusBadRequest)
+		utils.RespondWithBadRequest(w, "Longitud inválida", err.Error())
 		return
 	}
 
 	lugar, ciudad, err := utils.ReverseGeocodeWithCity(latitud, longitud)
 
 	if err != nil {
-		http.Error(w, "Error al obtener la ciudad", http.StatusInternalServerError)
+		utils.RespondWithBadRequest(w, "Error al obtener la ciudad", err.Error())
 		return
 	}
 
@@ -91,19 +90,13 @@ func (h *UserActionsHandler) CreateAction(w http.ResponseWriter, r *http.Request
 
 	err = h.repo.CreateAction(&action)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		utils.RespondWithDatabaseError(w, "Error al crear la acción", err.Error())
 		return
 	}
+	// Verificar si el usuario ha ganado medallas
+	h.checkMedallas(userID)
 
-	err = h.medallasRepo.AutoAsignMedallas(userID)
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
-	}
-
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(http.StatusCreated)
-	json.NewEncoder(w).Encode(action)
+	utils.RespondWithCreated(w, action, "Acción creada correctamente")
 }
 
 func (h *UserActionsHandler) GetUserActions(w http.ResponseWriter, r *http.Request) {
@@ -112,12 +105,11 @@ func (h *UserActionsHandler) GetUserActions(w http.ResponseWriter, r *http.Reque
 
 	actions, err := h.repo.GetUserActions(userID)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		utils.RespondWithDatabaseError(w, "Error al obtener las acciones del usuario", err.Error())
 		return
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(actions)
+	utils.RespondWithSuccess(w, actions, "Acciones del usuario obtenidas correctamente")
 }
 
 func (h *UserActionsHandler) DeleteAction(w http.ResponseWriter, r *http.Request) {
@@ -128,16 +120,16 @@ func (h *UserActionsHandler) DeleteAction(w http.ResponseWriter, r *http.Request
 	action, err := h.repo.GetActionByID(id)
 	if err != nil {
 		if err == sql.ErrNoRows {
-			http.Error(w, "Acción no encontrada", http.StatusNotFound)
-			return
+			utils.RespondWithNotFound(w, "Acción no encontrada", "No se encontró la acción con el ID proporcionado")
+		} else {
+			utils.RespondWithDatabaseError(w, "Error al obtener la acción", err.Error())
 		}
-		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
 
-	// Eliminar la acción de manera lógica
+	// Eliminar la acción
 	if err := h.repo.SoftDeleteAction(id); err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		utils.RespondWithDatabaseError(w, "Error al eliminar la acción", err.Error())
 		return
 	}
 
@@ -149,26 +141,35 @@ func (h *UserActionsHandler) DeleteAction(w http.ResponseWriter, r *http.Request
 
 	// Decrementar el contador total de acciones del usuario
 	if err := h.repo.DecrementTotalActions(action.UserID); err != nil {
-		http.Error(w, "Error al actualizar el total de acciones", http.StatusInternalServerError)
+		// Solo registramos el error pero no interrumpimos la operación
+		// ya que la acción ya fue eliminada
+		utils.RespondWithSuccess(w, nil, "Acción eliminada correctamente, pero hubo un error al actualizar las estadísticas")
 		return
 	}
 
 	// Verificar y actualizar las medallas del usuario
 	if err := h.medallasRepo.VerifyAndUpdateMedallas(action.UserID); err != nil {
-		http.Error(w, "Error al verificar las medallas del usuario", http.StatusInternalServerError)
+		utils.RespondWithDatabaseError(w, "Error al verificar las medallas del usuario", err.Error())
 		return
 	}
 
-	w.WriteHeader(http.StatusNoContent)
+	utils.RespondWithSuccess(w, nil, "Acción eliminada correctamente")
 }
 
 func (h *UserActionsHandler) GetAllActions(w http.ResponseWriter, r *http.Request) {
 	actions, err := h.repo.GetAllActions()
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		utils.RespondWithDatabaseError(w, "Error al obtener todas las acciones", err.Error())
 		return
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(actions)
+	utils.RespondWithSuccess(w, actions, "Todas las acciones obtenidas correctamente")
+}
+
+// Método auxiliar para verificar si el usuario ha ganado medallas
+func (h *UserActionsHandler) checkMedallas(userID string) {
+	// Esta función se ejecuta en segundo plano y no afecta la respuesta al cliente
+	go func() {
+		h.medallasRepo.AutoAsignMedallas(userID)
+	}()
 }

@@ -2,6 +2,7 @@ package postgres
 
 import (
 	"backend_proyecto_verde/internal/models"
+	"backend_proyecto_verde/pkg/database"
 	"database/sql"
 	"time"
 )
@@ -16,26 +17,30 @@ func NewMedallasRepository(db *sql.DB, userStatsRepo *UserRepository) *MedallasR
 }
 
 func (r *MedallasRepository) CreateMedalla(medalla *models.Medalla) error {
-	query := `
-		INSERT INTO medallas (
-			nombre, descripcion, dificultad, requiere_amistades,
-			requiere_puntos, requiere_acciones, requiere_torneos,
-			requiere_victoria_torneos, numero_requerido
-		) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
-		RETURNING id`
+	return database.WithTransaction(r.db, func(tx *sql.Tx) error {
+		query := `
+			INSERT INTO medallas (
+				nombre, descripcion, dificultad, requiere_amistades,
+				requiere_puntos, requiere_acciones, requiere_torneos,
+				requiere_victoria_torneos, numero_requerido
+			) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+			RETURNING id`
 
-	return r.db.QueryRow(
-		query,
-		medalla.Nombre,
-		medalla.Descripcion,
-		medalla.Dificultad,
-		medalla.RequiereAmistades,
-		medalla.RequierePuntos,
-		medalla.RequiereAcciones,
-		medalla.RequiereTorneos,
-		medalla.RequiereVictoriaTorneos,
-		medalla.NumeroRequerido,
-	).Scan(&medalla.ID)
+		err := tx.QueryRow(
+			query,
+			medalla.Nombre,
+			medalla.Descripcion,
+			medalla.Dificultad,
+			medalla.RequiereAmistades,
+			medalla.RequierePuntos,
+			medalla.RequiereAcciones,
+			medalla.RequiereTorneos,
+			medalla.RequiereVictoriaTorneos,
+			medalla.NumeroRequerido,
+		).Scan(&medalla.ID)
+
+		return err
+	})
 }
 
 func (r *MedallasRepository) AutoAsignMedallas(userID string) error {
@@ -159,12 +164,14 @@ func (r *MedallasRepository) GetMedallas() ([]models.Medalla, error) {
 }
 
 func (r *MedallasRepository) AsignarMedalla(userID, medallaID string) error {
-	query := `
-		INSERT INTO medallas_ganadas (id_usuario, id_medalla, fecha_ganada)
-		VALUES ($1, $2, $3)`
+	return database.WithTransaction(r.db, func(tx *sql.Tx) error {
+		query := `
+			INSERT INTO medallas_ganadas (id_usuario, id_medalla, fecha_ganada)
+			VALUES ($1, $2, $3)`
 
-	_, err := r.db.Exec(query, userID, medallaID, time.Now())
-	return err
+		_, err := tx.Exec(query, userID, medallaID, time.Now())
+		return err
+	})
 }
 
 func (r *MedallasRepository) GetMedallasUsuario(userID string) ([]models.MedallaGanada, error) {
@@ -196,38 +203,38 @@ func (r *MedallasRepository) GetMedallasUsuario(userID string) ([]models.Medalla
 
 func (r *MedallasRepository) VerifyAndUpdateMedallas(userID string) error {
 	// Primero obtenemos las estadísticas actuales del usuario
-	var stats struct {
-		Puntos   int
-		Acciones int
-	}
+		var stats struct {
+			Puntos   int
+			Acciones int
+		}
 
-	err := r.db.QueryRow(`
+		err := r.db.QueryRow(`
 		SELECT puntos, acciones 
 		FROM user_stats 
 		WHERE user_id = $1
 	`, userID).Scan(&stats.Puntos, &stats.Acciones)
 
-	if err != nil {
-		return err
-	}
+		if err != nil {
+			return err
+		}
 
 	// Comenzar una transacción
 	tx, err := r.db.Begin()
 	if err != nil {
-		return err
-	}
+			return err
+		}
 
 	defer tx.Rollback() // Se ejecuta si hay un error en cualquier parte
 
 	// Verificar y posiblemente eliminar medallas de puntos
 	if err = r.verifyPointsMedals(tx, userID, stats.Puntos); err != nil {
-		return err
-	}
+			return err
+		}
 
 	// Verificar y posiblemente eliminar medallas de acciones
 	if err = r.verifyActionsMedals(tx, userID, stats.Acciones); err != nil {
-		return err
-	}
+			return err
+		}
 
 	return tx.Commit()
 }
@@ -235,7 +242,7 @@ func (r *MedallasRepository) VerifyAndUpdateMedallas(userID string) error {
 func (r *MedallasRepository) verifyPointsMedals(tx *sql.Tx, userID string, currentPoints int) error {
 	// Obtener todas las medallas de puntos del usuario
 	rows, err := tx.Query(`
-		SELECT m.id, m.numero_requerido 
+		SELECT m.id, m.numero_requerido
 		FROM medallas_ganadas mg
 		JOIN medallas m ON mg.id_medalla = m.id
 		WHERE mg.id_usuario = $1 AND m.requiere_puntos = true
@@ -262,8 +269,8 @@ func (r *MedallasRepository) verifyPointsMedals(tx *sql.Tx, userID string, curre
 	}
 	// Verificar si hubo errores en la iteración de `rows`
 	if err := rows.Err(); err != nil {
-		return err
-	}
+				return err
+			}
 
 	// Ejecutar las eliminaciones después de procesar todas las filas
 	query := `DELETE FROM medallas_ganadas WHERE id_usuario = $1 AND id_medalla = $2`
@@ -307,8 +314,8 @@ func (r *MedallasRepository) verifyActionsMedals(tx *sql.Tx, userID string, curr
 
 	// Verificar si hubo errores en la iteración de `rows`
 	if err := rows.Err(); err != nil {
-		return err
-	}
+				return err
+			}
 
 	// Ejecutar las eliminaciones después de procesar todas las filas
 	query := `DELETE FROM medallas_ganadas WHERE id_usuario = $1 AND id_medalla = $2`
@@ -317,6 +324,7 @@ func (r *MedallasRepository) verifyActionsMedals(tx *sql.Tx, userID string, curr
 			return err
 		}
 	}
+
 	return nil
 }
 
@@ -351,11 +359,14 @@ func (r *MedallasRepository) GetSlogansMedallasGanadas(userID string) ([]string,
 }
 
 func (r *MedallasRepository) ResetPendingMedallas(userID string) error {
-	query := `
-		UPDATE user_stats 
-		SET pending_medalla = 0 
-		WHERE user_id = $1`
+	return database.WithTransaction(r.db, func(tx *sql.Tx) error {
+		// Marcar todas las medallas como notificadas
+		query := `
+			UPDATE user_stats
+			SET pending_medalla = 0
+			WHERE user_id = $1`
 
-	_, err := r.db.Exec(query, userID)
-	return err
+		_, err := tx.Exec(query, userID)
+		return err
+	})
 }

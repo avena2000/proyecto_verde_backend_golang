@@ -2,6 +2,7 @@ package postgres
 
 import (
 	"backend_proyecto_verde/internal/models"
+	"backend_proyecto_verde/pkg/database"
 	"database/sql"
 	"errors"
 	"time"
@@ -41,34 +42,36 @@ func (r *UserFriendsRepository) SendFriendRequest(userID, friendIDRequest string
 	if err != nil {
 		return err
 	}
+
 	if friendship != "" {
 		return ErrFriendRequestExists
 	}
 
-	query = `
-		INSERT INTO user_friends (user_id, friend_id, pending_id)
-		VALUES ($1, $2, $3)
-		ON CONFLICT (user_id, friend_id) DO UPDATE
-		SET deleted_at = NULL, pending_id = $3
-		WHERE user_friends.deleted_at IS NOT NULL`
+	return database.WithTransaction(r.db, func(tx *sql.Tx) error {
+		query := `
+			INSERT INTO user_friends (user_id, friend_id, pending_id)
+			VALUES ($1, $2, $3)
+			ON CONFLICT (user_id, friend_id) DO UPDATE
+			SET deleted_at = NULL, pending_id = $3
+			WHERE user_friends.deleted_at IS NOT NULL`
 
-	_, err = r.db.Exec(query, orderedUserID, orderedFriendID, friendID)
+		_, err := tx.Exec(query, orderedUserID, orderedFriendID, friendID)
+		if err != nil {
+			return err
+		}
 
-	if err != nil {
-		return err
-	}
+		query = `
+			UPDATE user_stats
+			SET pending_amigo = pending_amigo + 1
+			WHERE user_id = $1
+		`
+		_, err = tx.Exec(query, friendID)
+		if err != nil {
+			return err
+		}
 
-	query = `
-		UPDATE user_stats
-		SET pending_amigo = pending_amigo + 1
-		WHERE user_id = $1
-	`
-	_, err = r.db.Exec(query, friendID)
-	if err != nil {
-		return err
-	}
-
-	return nil
+		return nil
+	})
 }
 
 func min(a, b string) string {
@@ -109,50 +112,51 @@ func getFriendship(db *sql.DB, userID, friendID string) (string, error) {
 }
 
 func (r *UserFriendsRepository) AcceptFriendRequest(userID, friendID string) error {
-	query := `
-		UPDATE user_friends
-		SET pending_id = NULL
-		WHERE
-		((user_id = $1 AND friend_id = $2) OR (user_id = $2 AND friend_id = $1))
-		AND (pending_id = $1 OR pending_id = $2);
-`
+	return database.WithTransaction(r.db, func(tx *sql.Tx) error {
+		query := `
+			UPDATE user_friends
+			SET pending_id = NULL
+			WHERE
+			((user_id = $1 AND friend_id = $2) OR (user_id = $2 AND friend_id = $1))
+			AND (pending_id = $1 OR pending_id = $2);
+		`
 
-	result, err := r.db.Exec(query, userID, friendID)
-	if err != nil {
-		return err
-	}
+		result, err := tx.Exec(query, userID, friendID)
+		if err != nil {
+			return err
+		}
 
-	query = `
-		UPDATE user_stats
-		SET cantidad_amigos = cantidad_amigos + 1
-		WHERE user_id IN ($1, $2);
-	`
-	_, err = r.db.Exec(query, userID, friendID)
-	if err != nil {
-		return err
-	}
+		rows, err := result.RowsAffected()
+		if err != nil {
+			return err
+		}
 
-	rows, err := result.RowsAffected()
-	if err != nil {
-		return err
-	}
+		if rows == 0 {
+			return sql.ErrNoRows
+		}
 
-	if rows == 0 {
-		return sql.ErrNoRows
-	}
+		query = `
+			UPDATE user_stats
+			SET cantidad_amigos = cantidad_amigos + 1
+			WHERE user_id IN ($1, $2);
+		`
+		_, err = tx.Exec(query, userID, friendID)
+		if err != nil {
+			return err
+		}
 
-	query = `
-		UPDATE user_stats
-		SET pending_amigo = pending_amigo - 1
-		WHERE user_id = $1
-	`
-	_, err = r.db.Exec(query, userID)
+		query = `
+			UPDATE user_stats
+			SET pending_amigo = pending_amigo - 1
+			WHERE user_id = $1
+		`
+		_, err = tx.Exec(query, userID)
+		if err != nil {
+			return err
+		}
 
-	if err != nil {
-		return err
-	}
-
-	return nil
+		return nil
+	})
 }
 
 func (r *UserFriendsRepository) GetFriendsList(userID string) ([]models.UserFriend, error) {
@@ -206,47 +210,94 @@ func (r *UserFriendsRepository) GetFriendsList(userID string) ([]models.UserFrie
 }
 
 func (r *UserFriendsRepository) RemoveFriend(userID, friendID string) error {
-
-	var exists bool
+	// Primero verificamos si la amistad existe y no ha sido borrada
+	var existsAndNotDeleted bool
 	searchQuery := `
 		SELECT EXISTS (
 			SELECT 1 FROM user_friends
 			WHERE ((user_id = $1 AND friend_id = $2) OR (user_id = $2 AND friend_id = $1))
-			AND pending_id IS NULL
+			AND deleted_at IS NULL
 		)`
-	err := r.db.QueryRow(searchQuery, userID, friendID).Scan(&exists)
+	err := r.db.QueryRow(searchQuery, userID, friendID).Scan(&existsAndNotDeleted)
 	if err != nil {
 		return err
 	}
 
-	query := `
-		UPDATE user_friends
-		SET deleted_at = $1
-		WHERE
-		((user_id = $2 AND friend_id = $3) OR (user_id = $3 AND friend_id = $2))
-		AND deleted_at IS NULL;
-`
+	// Si no existe o ya fue borrada, no hacemos nada
+	if !existsAndNotDeleted {
+		return nil
+	}
 
-	_, err = r.db.Exec(query, time.Now(), userID, friendID)
-
+	// Verificamos si es una amistad confirmada o pendiente
+	var isPendingFriendship bool
+	pendingQuery := `
+		SELECT EXISTS (
+			SELECT 1 FROM user_friends
+			WHERE ((user_id = $1 AND friend_id = $2) OR (user_id = $2 AND friend_id = $1))
+			AND deleted_at IS NULL
+			AND pending_id IS NOT NULL
+		)`
+	err = r.db.QueryRow(pendingQuery, userID, friendID).Scan(&isPendingFriendship)
 	if err != nil {
 		return err
 	}
-	if exists {
-		query = `
-		UPDATE user_stats
-		SET cantidad_amigos = cantidad_amigos - 1
-		WHERE user_id IN ($1, $2);
+
+	return database.WithTransaction(r.db, func(tx *sql.Tx) error {
+		query := `
+			UPDATE user_friends
+			SET deleted_at = $1
+			WHERE
+			((user_id = $2 AND friend_id = $3) OR (user_id = $3 AND friend_id = $2))
+			AND deleted_at IS NULL;
 		`
-		_, err = r.db.Exec(query, userID, friendID)
-	} else {
-		query = `
-		UPDATE user_stats
-		SET pending_amigo = pending_amigo - 1
-		WHERE user_id = $1
-	`
-		_, err = r.db.Exec(query, userID)
-	}
 
-	return err
+		result, err := tx.Exec(query, time.Now(), userID, friendID)
+		if err != nil {
+			return err
+		}
+
+		// Verificamos que realmente se actualizó alguna fila
+		rowsAffected, err := result.RowsAffected()
+		if err != nil {
+			return err
+		}
+
+		// Si no se actualizó ninguna fila, no actualizamos los contadores
+		if rowsAffected == 0 {
+			return nil
+		}
+
+		if !isPendingFriendship {
+			// Es una amistad confirmada
+			query = `
+			UPDATE user_stats
+			SET cantidad_amigos = cantidad_amigos - 1
+			WHERE user_id IN ($1, $2);
+			`
+			_, err = tx.Exec(query, userID, friendID)
+		} else {
+			// Es una solicitud pendiente
+			// Determinamos quién es el destinatario de la solicitud
+			var pendingUserID string
+			pendingQuery := `
+				SELECT pending_id 
+				FROM user_friends
+				WHERE ((user_id = $1 AND friend_id = $2) OR (user_id = $2 AND friend_id = $1))
+				AND deleted_at IS NULL
+			`
+			err = tx.QueryRow(pendingQuery, userID, friendID).Scan(&pendingUserID)
+			if err != nil {
+				return err
+			}
+
+			query = `
+			UPDATE user_stats
+			SET pending_amigo = pending_amigo - 1
+			WHERE user_id = $1
+			`
+			_, err = tx.Exec(query, pendingUserID)
+		}
+
+		return err
+	})
 }

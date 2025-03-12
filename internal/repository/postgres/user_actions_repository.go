@@ -2,12 +2,14 @@ package postgres
 
 import (
 	"backend_proyecto_verde/internal/models"
+	"backend_proyecto_verde/pkg/database"
 	"database/sql"
 	"encoding/json"
 	"fmt"
 	"io"
 	"mime/multipart"
 	"net/http"
+	"os"
 	"strings"
 	"time"
 
@@ -26,55 +28,71 @@ func NewUserActionsRepository(db *sql.DB) *UserActionsRepository {
 }
 
 func (r *UserActionsRepository) CreateAction(action *models.UserAction) error {
-	query := `
-		INSERT INTO user_actions (
-			user_id, tipo_accion, foto, latitud, longitud, ciudad, lugar,
-			en_colaboracion, colaboradores, es_para_torneo, id_torneo
-		) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
-		RETURNING id, created_at`
+	return database.WithTransaction(r.db, func(tx *sql.Tx) error {
+		query := `
+			INSERT INTO user_actions (
+				user_id, tipo_accion, foto, latitud, longitud, ciudad, lugar,
+				en_colaboracion, colaboradores, es_para_torneo, id_torneo
+			) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+			RETURNING id, created_at`
 
-	err := r.db.QueryRow(
-		query,
-		action.UserID,
-		action.TipoAccion,
-		action.Foto,
-		action.Latitud,
-		action.Longitud,
-		action.Ciudad,
-		action.Lugar,
-		action.EnColaboracion,
-		pq.Array(action.Colaboradores),
-		action.EsParaTorneo,
-		action.IDTorneo,
-	).Scan(&action.ID, &action.CreatedAt)
+		err := tx.QueryRow(
+			query,
+			action.UserID,
+			action.TipoAccion,
+			action.Foto,
+			action.Latitud,
+			action.Longitud,
+			action.Ciudad,
+			action.Lugar,
+			action.EnColaboracion,
+			pq.Array(action.Colaboradores),
+			action.EsParaTorneo,
+			action.IDTorneo,
+		).Scan(&action.ID, &action.CreatedAt)
 
-	if err != nil {
-		return err
-	}
+		if err != nil {
+			return err
+		}
 
-	puntos := 0
+		// Actualizar estadísticas del usuario
+		updateStatsQuery := `
+			UPDATE user_stats
+			SET acciones = acciones + 1, puntos = puntos + $1
+			WHERE user_id = $2`
 
-	if action.TipoAccion == "ayuda" {
-		puntos = 50
-	} else if action.TipoAccion == "alerta" {
-		puntos = 40
-	} else if action.TipoAccion == "descubrimiento" {
-		puntos = 25
-	}
+		var puntos int
+		switch action.TipoAccion {
+		case "ayuda":
+			puntos = 50
+		case "alerta":
+			puntos = 40
+		case "descubrimiento":
+			puntos = 25
+		default:
+			puntos = 5
+		}
 
-	updateQuery := `
-		UPDATE user_stats
-		SET acciones = acciones + 1,
-		puntos = puntos + $2
-		WHERE user_id = $1;`
+		_, err = tx.Exec(updateStatsQuery, puntos, action.UserID)
+		if err != nil {
+			return err
+		}
 
-	_, err = r.db.Exec(updateQuery, action.UserID, puntos)
-	if err != nil {
-		return err
-	}
+		// Si es para un torneo, actualizar puntos del torneo
+		if action.EsParaTorneo && action.IDTorneo != nil {
+			updateTorneoQuery := `
+				UPDATE torneo_estadisticas
+				SET puntos = puntos + $1
+				WHERE id_jugador = $2 AND id_torneo = $3`
 
-	return nil
+			_, err = tx.Exec(updateTorneoQuery, puntos, action.UserID, *action.IDTorneo)
+			if err != nil {
+				return err
+			}
+		}
 
+		return nil
+	})
 }
 
 func (r *UserActionsRepository) UploadImage(file multipart.File) (string, error) {
@@ -104,7 +122,7 @@ func (r *UserActionsRepository) UploadImage(file multipart.File) (string, error)
 	writer.Close()
 
 	// Crear la solicitud al CDN
-	url := "http://localhost:8080/api/cdn/upload/image/"
+	url := os.Getenv("CDN_URL") + "/api/cdn/upload/image/"
 	req, err := http.NewRequest("POST", url, body)
 	if err != nil {
 		return "", fmt.Errorf("error al crear la solicitud al CDN: %v", err)
@@ -136,7 +154,8 @@ func (r *UserActionsRepository) UploadImage(file multipart.File) (string, error)
 
 	imageURL := cdnResponse.URL
 	if !strings.Contains(cdnResponse.URL, "/api/cdn") {
-		imageURL = strings.Replace(cdnResponse.URL, "localhost:8080", "localhost:8080/api/cdn", 1)
+		imageURL = strings.Replace(cdnResponse.URL, strings.Replace(os.Getenv("CDN_URL"), "http://", "", 1), strings.Replace(os.Getenv("CDN_URL"), "http://", "", 1)+"/api/cdn", 1)
+		fmt.Println("imageURL", imageURL)
 	}
 
 	return imageURL, nil
@@ -179,26 +198,44 @@ func (r *UserActionsRepository) GetUserActions(userID string) ([]models.UserActi
 }
 
 func (r *UserActionsRepository) SoftDeleteAction(id string) error {
-	query := `
-		UPDATE user_actions
-		SET deleted_at = $1
-		WHERE id = $2 AND deleted_at IS NULL`
+	return database.WithTransaction(r.db, func(tx *sql.Tx) error {
+		// Obtener información de la acción antes de eliminarla
+		var userID, tipoAccion string
+		var esParaTorneo bool
+		var idTorneo *string
 
-	result, err := r.db.Exec(query, time.Now(), id)
-	if err != nil {
-		return err
-	}
+		getActionQuery := `
+			SELECT user_id, tipo_accion, es_para_torneo, id_torneo
+			FROM user_actions
+			WHERE id = $1 AND deleted_at IS NULL`
 
-	rows, err := result.RowsAffected()
-	if err != nil {
-		return err
-	}
+		err := tx.QueryRow(getActionQuery, id).Scan(&userID, &tipoAccion, &esParaTorneo, &idTorneo)
+		if err != nil {
+			return err
+		}
 
-	if rows == 0 {
-		return sql.ErrNoRows
-	}
+		// Marcar la acción como eliminada
+		updateQuery := `
+			UPDATE user_actions
+			SET deleted_at = $1
+			WHERE id = $2 AND deleted_at IS NULL`
 
-	return nil
+		result, err := tx.Exec(updateQuery, time.Now(), id)
+		if err != nil {
+			return err
+		}
+
+		rowsAffected, err := result.RowsAffected()
+		if err != nil {
+			return err
+		}
+
+		if rowsAffected == 0 {
+			return fmt.Errorf("no se encontró la acción o ya fue eliminada")
+		}
+
+		return nil
+	})
 }
 
 func (r *UserActionsRepository) GetActionByID(id string) (*models.UserAction, error) {

@@ -30,7 +30,6 @@ func SetupRoutes(
 	r.HandleFunc("/api/users/{id}/basic-info", userHandler.GetUserBasicInfo).Methods("GET")
 	r.HandleFunc("/api/users/{id}/basic-info", userHandler.CreateOrUpdateUserBasicInfo).Methods("PUT")
 	r.HandleFunc("/api/users/{id}/profile", userHandler.GetUserProfile).Methods("GET")
-	r.HandleFunc("/api/users/{id}/profile", userHandler.UpdateUserProfile).Methods("PUT")
 	r.HandleFunc("/api/users/{id}/profile/edit", userHandler.UpdateUserProfileEdit).Methods("PUT")
 	r.HandleFunc("/api/users/{id}/stats", userHandler.GetUserStats).Methods("GET")
 	r.HandleFunc("/api/users/{id}/stats", userHandler.UpdateUserStats).Methods("PUT")

@@ -3,6 +3,7 @@ package handlers
 import (
 	"backend_proyecto_verde/internal/models"
 	"backend_proyecto_verde/internal/repository/postgres"
+	"backend_proyecto_verde/internal/utils"
 	"encoding/json"
 	"net/http"
 
@@ -20,29 +21,26 @@ func NewMedallasHandler(repo *postgres.MedallasRepository) *MedallasHandler {
 func (h *MedallasHandler) CreateMedalla(w http.ResponseWriter, r *http.Request) {
 	var medalla models.Medalla
 	if err := json.NewDecoder(r.Body).Decode(&medalla); err != nil {
-		http.Error(w, "Error al decodificar el cuerpo de la solicitud", http.StatusBadRequest)
+		utils.RespondWithBadRequest(w, "Error al decodificar el cuerpo de la solicitud", err.Error())
 		return
 	}
 
 	if err := h.repo.CreateMedalla(&medalla); err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		utils.RespondWithDatabaseError(w, "Error al crear la medalla", err.Error())
 		return
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(http.StatusCreated)
-	json.NewEncoder(w).Encode(medalla)
+	utils.RespondWithCreated(w, medalla, "Medalla creada correctamente")
 }
 
 func (h *MedallasHandler) GetMedallas(w http.ResponseWriter, r *http.Request) {
 	medallas, err := h.repo.GetMedallas()
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		utils.RespondWithDatabaseError(w, "Error al obtener las medallas", err.Error())
 		return
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(medallas)
+	utils.RespondWithSuccess(w, medallas, "Medallas obtenidas correctamente")
 }
 
 func (h *MedallasHandler) AsignarMedalla(w http.ResponseWriter, r *http.Request) {
@@ -51,11 +49,11 @@ func (h *MedallasHandler) AsignarMedalla(w http.ResponseWriter, r *http.Request)
 	medallaID := vars["medalla_id"]
 
 	if err := h.repo.AsignarMedalla(userID, medallaID); err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		utils.RespondWithDatabaseError(w, "Error al asignar la medalla", err.Error())
 		return
 	}
 
-	w.WriteHeader(http.StatusCreated)
+	utils.RespondWithSuccess(w, nil, "Medalla asignada correctamente")
 }
 
 func (h *MedallasHandler) GetMedallasUsuario(w http.ResponseWriter, r *http.Request) {
@@ -64,12 +62,23 @@ func (h *MedallasHandler) GetMedallasUsuario(w http.ResponseWriter, r *http.Requ
 
 	medallas, err := h.repo.GetMedallasUsuario(userID)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		utils.RespondWithDatabaseError(w, "Error al obtener las medallas del usuario", err.Error())
 		return
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(medallas)
+	utils.RespondWithSuccess(w, medallas, "Medallas del usuario obtenidas correctamente")
+}
+
+func (h *MedallasHandler) VerifyAndUpdateMedallas(w http.ResponseWriter, r *http.Request) {
+	vars := mux.Vars(r)
+	userID := vars["user_id"]
+
+	if err := h.repo.VerifyAndUpdateMedallas(userID); err != nil {
+		utils.RespondWithDatabaseError(w, "Error al verificar y actualizar las medallas", err.Error())
+		return
+	}
+
+	utils.RespondWithSuccess(w, nil, "Medallas verificadas y actualizadas correctamente")
 }
 
 func (h *MedallasHandler) GetSlogansMedallasGanadas(w http.ResponseWriter, r *http.Request) {
@@ -78,12 +87,11 @@ func (h *MedallasHandler) GetSlogansMedallasGanadas(w http.ResponseWriter, r *ht
 
 	slogans, err := h.repo.GetSlogansMedallasGanadas(userID)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		utils.RespondWithDatabaseError(w, "Error al obtener los slogans de medallas ganadas", err.Error())
 		return
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(slogans)
+	utils.RespondWithSuccess(w, slogans, "Slogans de medallas ganadas obtenidos correctamente")
 }
 
 func (h *MedallasHandler) ResetPendingMedallas(w http.ResponseWriter, r *http.Request) {
@@ -91,9 +99,9 @@ func (h *MedallasHandler) ResetPendingMedallas(w http.ResponseWriter, r *http.Re
 	userID := vars["user_id"]
 
 	if err := h.repo.ResetPendingMedallas(userID); err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		utils.RespondWithDatabaseError(w, "Error al reiniciar el contador de medallas pendientes", err.Error())
 		return
 	}
 
-	w.WriteHeader(http.StatusOK)
+	utils.RespondWithSuccess(w, nil, "Contador de medallas pendientes reiniciado correctamente")
 }

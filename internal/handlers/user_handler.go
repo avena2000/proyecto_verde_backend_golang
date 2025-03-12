@@ -3,6 +3,7 @@ package handlers
 import (
 	"backend_proyecto_verde/internal/models"
 	"backend_proyecto_verde/internal/repository/postgres"
+	"backend_proyecto_verde/internal/utils"
 	"encoding/json"
 	"net/http"
 	"strconv"
@@ -21,19 +22,19 @@ func NewUserHandler(repo *postgres.UserRepository) *UserHandler {
 func (h *UserHandler) CreateUser(w http.ResponseWriter, r *http.Request) {
 	var createUser models.CreateUserAccess
 	if err := json.NewDecoder(r.Body).Decode(&createUser); err != nil {
-		http.Error(w, "Error al decodificar el cuerpo de la solicitud", http.StatusBadRequest)
+		utils.RespondWithBadRequest(w, "Error al decodificar el cuerpo de la solicitud", err.Error())
 		return
 	}
 
 	existingUser, err := h.repo.GetUserByUsername(createUser.Username)
 	if err == nil && existingUser != nil {
-		http.Error(w, "El usuario ya existe", http.StatusConflict)
+		utils.RespondWithUserAlreadyExists(w, "El usuario ya existe", "El usuario ya existe en la base de datos")
 		return
 	}
 
 	user, err := h.repo.CreateUser(&createUser)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusConflict)
+		utils.RespondWithDatabaseError(w, "Error al crear el usuario", err.Error())
 		return
 	}
 
@@ -50,7 +51,7 @@ func (h *UserHandler) CreateUser(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err := h.repo.UpdateUserStats(&stats); err != nil {
-		http.Error(w, err.Error(), http.StatusConflict)
+		utils.RespondWithDatabaseError(w, "Error al actualizar las estadísticas del usuario", err.Error())
 		return
 	}
 
@@ -64,32 +65,28 @@ func (h *UserHandler) CreateUser(w http.ResponseWriter, r *http.Request) {
 		DetalleAdicional: "0",
 	}
 
-	if err := h.repo.UpdateUserProfile(&profile); err != nil {
-		http.Error(w, err.Error(), http.StatusConflict)
+	if err := h.repo.CreateUserProfile(&profile); err != nil {
+		utils.RespondWithDatabaseError(w, "Error al actualizar el perfil del usuario", err.Error())
 		return
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(http.StatusCreated)
-	json.NewEncoder(w).Encode(user)
+	utils.RespondWithCreated(w, user, "Usuario creado correctamente")
 }
 
 func (h *UserHandler) LoginUser(w http.ResponseWriter, r *http.Request) {
 	var userAccess models.CreateUserAccess
 	if err := json.NewDecoder(r.Body).Decode(&userAccess); err != nil {
-		http.Error(w, "Error al decodificar el cuerpo de la solicitud", http.StatusBadRequest)
+		utils.RespondWithBadRequest(w, "Error al decodificar el cuerpo de la solicitud", err.Error())
 		return
 	}
 
 	existingUser, err := h.repo.GetUserByUsernameAndPassword(userAccess.Username, userAccess.Password)
 	if err != nil && existingUser == nil {
-		http.Error(w, "Credenciales incorrectas", http.StatusUnauthorized)
+		utils.RespondWithInvalidCredentials(w, "Credenciales incorrectas", "Las credenciales proporcionadas son incorrectas")
 		return
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(http.StatusCreated)
-	json.NewEncoder(w).Encode(existingUser)
+	utils.RespondWithSuccess(w, existingUser, "Inicio de sesión exitoso")
 }
 
 func (h *UserHandler) CreateOrUpdateUserBasicInfo(w http.ResponseWriter, r *http.Request) {
@@ -101,20 +98,17 @@ func (h *UserHandler) CreateOrUpdateUserBasicInfo(w http.ResponseWriter, r *http
 	}
 
 	if err := json.NewDecoder(r.Body).Decode(&basicInfo); err != nil {
-		http.Error(w, "Error al decodificar el cuerpo de la solicitud", http.StatusBadRequest)
-
+		utils.RespondWithBadRequest(w, "Error al decodificar el cuerpo de la solicitud", err.Error())
 		return
 	}
 
 	err := h.repo.CreateOrUpdateUserBasicInfo(&basicInfo)
 	if err != nil {
-		http.Error(w, "Error al guardar la información básica del usuario "+err.Error(), http.StatusInternalServerError)
+		utils.RespondWithDatabaseError(w, "Error al guardar la información básica del usuario", err.Error())
 		return
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(http.StatusCreated)
-	json.NewEncoder(w).Encode(basicInfo)
+	utils.RespondWithCreated(w, basicInfo, "Información básica del usuario guardada correctamente")
 }
 
 func (h *UserHandler) GetUserBasicInfo(w http.ResponseWriter, r *http.Request) {
@@ -127,13 +121,11 @@ func (h *UserHandler) GetUserBasicInfo(w http.ResponseWriter, r *http.Request) {
 
 	basicInfoUser, err := h.repo.GetUserBasicInfo(&basicInfo)
 	if err != nil {
-		http.Error(w, "Error, no se pudo obtener la información básica del usuario "+err.Error(), http.StatusInternalServerError)
+		utils.RespondWithDatabaseError(w, "Error, no se pudo obtener la información básica del usuario", err.Error())
 		return
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(http.StatusCreated)
-	json.NewEncoder(w).Encode(basicInfoUser)
+	utils.RespondWithSuccess(w, basicInfoUser, "Información básica del usuario obtenida correctamente")
 }
 
 func (h *UserHandler) ListUsers(w http.ResponseWriter, r *http.Request) {
@@ -146,12 +138,11 @@ func (h *UserHandler) ListUsers(w http.ResponseWriter, r *http.Request) {
 
 	users, err := h.repo.ListUsers(limit, offset)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		utils.RespondWithDatabaseError(w, "Error al obtener la lista de usuarios", err.Error())
 		return
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(users)
+	utils.RespondWithSuccess(w, users, "Lista de usuarios obtenida correctamente")
 }
 
 func (h *UserHandler) GetUser(w http.ResponseWriter, r *http.Request) {
@@ -160,12 +151,11 @@ func (h *UserHandler) GetUser(w http.ResponseWriter, r *http.Request) {
 
 	user, err := h.repo.GetUserByID(id)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusNotFound)
+		utils.RespondWithNotFound(w, "Usuario no encontrado", "No se encontró el usuario con el ID proporcionado")
 		return
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(user)
+	utils.RespondWithSuccess(w, user, "Usuario obtenido correctamente")
 }
 
 func (h *UserHandler) ReLoginUser(w http.ResponseWriter, r *http.Request) {
@@ -174,12 +164,11 @@ func (h *UserHandler) ReLoginUser(w http.ResponseWriter, r *http.Request) {
 
 	user, err := h.repo.ReLoginUserByID(id)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusNotFound)
+		utils.RespondWithNotFound(w, "Usuario no encontrado", "No se encontró el usuario con el ID proporcionado")
 		return
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(user)
+	utils.RespondWithSuccess(w, user, "Usuario reautenticado correctamente")
 }
 
 func (h *UserHandler) UpdateUser(w http.ResponseWriter, r *http.Request) {
@@ -188,18 +177,17 @@ func (h *UserHandler) UpdateUser(w http.ResponseWriter, r *http.Request) {
 
 	var user models.UserAccess
 	if err := json.NewDecoder(r.Body).Decode(&user); err != nil {
-		http.Error(w, "Error al decodificar el cuerpo de la solicitud", http.StatusBadRequest)
+		utils.RespondWithBadRequest(w, "Error al decodificar el cuerpo de la solicitud", err.Error())
 		return
 	}
 
 	user.ID = id
 	if err := h.repo.UpdateUser(&user); err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		utils.RespondWithDatabaseError(w, "Error al actualizar el usuario", err.Error())
 		return
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(user)
+	utils.RespondWithSuccess(w, user, "Usuario actualizado correctamente")
 }
 
 func (h *UserHandler) GetUserProfile(w http.ResponseWriter, r *http.Request) {
@@ -208,32 +196,11 @@ func (h *UserHandler) GetUserProfile(w http.ResponseWriter, r *http.Request) {
 
 	profile, err := h.repo.GetUserProfile(id)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusNotFound)
+		utils.RespondWithNotFound(w, "Perfil de usuario no encontrado", "No se encontró el perfil de usuario con el ID proporcionado")
 		return
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(profile)
-}
-
-func (h *UserHandler) UpdateUserProfile(w http.ResponseWriter, r *http.Request) {
-	vars := mux.Vars(r)
-	id := vars["id"]
-
-	var profile models.UserProfile
-	if err := json.NewDecoder(r.Body).Decode(&profile); err != nil {
-		http.Error(w, "Error al decodificar el cuerpo de la solicitud", http.StatusBadRequest)
-		return
-	}
-
-	profile.UserID = id
-	if err := h.repo.UpdateUserProfile(&profile); err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
-	}
-
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(profile)
+	utils.RespondWithSuccess(w, profile, "Perfil de usuario obtenido correctamente")
 }
 
 func (h *UserHandler) UpdateUserProfileEdit(w http.ResponseWriter, r *http.Request) {
@@ -242,18 +209,17 @@ func (h *UserHandler) UpdateUserProfileEdit(w http.ResponseWriter, r *http.Reque
 
 	var profile models.EditProfile
 	if err := json.NewDecoder(r.Body).Decode(&profile); err != nil {
-		http.Error(w, "Error al decodificar el cuerpo de la solicitud", http.StatusBadRequest)
+		utils.RespondWithBadRequest(w, "Error al decodificar el cuerpo de la solicitud", err.Error())
 		return
 	}
 
 	profile.UserID = id
 	if err := h.repo.EditUserProfile(&profile); err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		utils.RespondWithDatabaseError(w, "Error al actualizar el perfil del usuario", err.Error())
 		return
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(profile)
+	utils.RespondWithSuccess(w, profile, "Perfil de usuario actualizado correctamente")
 }
 
 func (h *UserHandler) GetUserStats(w http.ResponseWriter, r *http.Request) {
@@ -262,12 +228,11 @@ func (h *UserHandler) GetUserStats(w http.ResponseWriter, r *http.Request) {
 
 	stats, err := h.repo.GetUserStats(id)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusNotFound)
+		utils.RespondWithNotFound(w, "Estadísticas de usuario no encontradas", "No se encontraron las estadísticas de usuario con el ID proporcionado")
 		return
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(stats)
+	utils.RespondWithSuccess(w, stats, "Estadísticas de usuario obtenidas correctamente")
 }
 
 func (h *UserHandler) UpdateUserStats(w http.ResponseWriter, r *http.Request) {
@@ -276,27 +241,25 @@ func (h *UserHandler) UpdateUserStats(w http.ResponseWriter, r *http.Request) {
 
 	var stats models.UserStats
 	if err := json.NewDecoder(r.Body).Decode(&stats); err != nil {
-		http.Error(w, "Error al decodificar el cuerpo de la solicitud", http.StatusBadRequest)
+		utils.RespondWithBadRequest(w, "Error al decodificar el cuerpo de la solicitud", err.Error())
 		return
 	}
 
 	stats.UserID = id
 	if err := h.repo.UpdateUserStats(&stats); err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		utils.RespondWithDatabaseError(w, "Error al actualizar las estadísticas del usuario", err.Error())
 		return
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(stats)
+	utils.RespondWithSuccess(w, stats, "Estadísticas de usuario actualizadas correctamente")
 }
 
 func (h *UserHandler) GetRanking(w http.ResponseWriter, r *http.Request) {
 	ranking, err := h.repo.GetRanking()
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		utils.RespondWithDatabaseError(w, "Error al obtener el ranking", err.Error())
 		return
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(ranking)
+	utils.RespondWithSuccess(w, ranking, "Ranking obtenido correctamente")
 }

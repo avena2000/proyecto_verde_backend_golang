@@ -3,6 +3,7 @@ package postgres
 import (
 	"backend_proyecto_verde/internal/models"
 	"backend_proyecto_verde/internal/utils"
+	"backend_proyecto_verde/pkg/database"
 	"database/sql"
 	"errors"
 	"fmt"
@@ -17,14 +18,23 @@ func NewUserRepository(db *sql.DB) *UserRepository {
 }
 
 func (r *UserRepository) CreateUser(user *models.CreateUserAccess) (*models.UserAccess, error) {
-	query := `
-		INSERT INTO user_access (username, password)
-		VALUES ($1, $2)
-		RETURNING id, username`
-
 	var createdUser models.UserAccess
-	err := r.db.QueryRow(query, user.Username, user.Password).
-		Scan(&createdUser.ID, &createdUser.Username)
+
+	err := database.WithTransaction(r.db, func(tx *sql.Tx) error {
+		query := `
+			INSERT INTO user_access (username, password)
+			VALUES ($1, $2)
+			RETURNING id, username`
+
+		err := tx.QueryRow(query, user.Username, user.Password).
+			Scan(&createdUser.ID, &createdUser.Username)
+
+		if err != nil {
+			return err
+		}
+
+		return nil
+	})
 
 	if err != nil {
 		return nil, err
@@ -163,24 +173,27 @@ func (r *UserRepository) GetUserByUsernameAndPassword(username string, password 
 }
 
 func (r *UserRepository) UpdateUser(user *models.UserAccess) error {
-	query := `
-		UPDATE user_access
-		SET username = $1
-		WHERE id = $2`
+	return database.WithTransaction(r.db, func(tx *sql.Tx) error {
+		query := `
+			UPDATE user_access
+			SET username = $1
+			WHERE id = $2`
 
-	_, err := r.db.Exec(query, user.Username, user.ID)
-	return err
+		_, err := tx.Exec(query, user.Username, user.ID)
+		return err
+	})
 }
 
 func (r *UserRepository) CreateUserBasicInfo(user *models.UserBasicInfo) error {
-	query := `
-		INSERT INTO user_basic_info (user_id, numero, nombre, apellido)
-		VALUES ($1, $2, $3, $4)
-		RETURNING id`
+	return database.WithTransaction(r.db, func(tx *sql.Tx) error {
+		query := `
+			INSERT INTO user_basic_info (user_id, numero, nombre, apellido)
+			VALUES ($1, $2, $3, $4)
+			RETURNING id`
 
-	_, err := r.db.Exec(query, user.ID, user.Numero, user.Nombre, user.Apellido)
-	return err
-
+		_, err := tx.Exec(query, user.ID, user.Numero, user.Nombre, user.Apellido)
+		return err
+	})
 }
 
 func (r *UserRepository) GetUserBasicInfo(user *models.UserBasicInfo) (*models.UserBasicInfo, error) {
@@ -199,33 +212,43 @@ func (r *UserRepository) GetUserBasicInfo(user *models.UserBasicInfo) (*models.U
 }
 
 func (r *UserRepository) CreateOrUpdateUserBasicInfo(user *models.UserBasicInfo) error {
-	var exists bool
+	return database.WithTransaction(r.db, func(tx *sql.Tx) error {
+		// Verificar si ya existe información básica para este usuario
+		query := `
+			SELECT EXISTS (
+				SELECT 1 FROM user_basic_info WHERE user_id = $1
+			)`
 
-	checkQuery := `
-		SELECT EXISTS (
-			SELECT 1 FROM user_basic_info WHERE user_id = $1
-		)`
-	err := r.db.QueryRow(checkQuery, user.UserID).Scan(&exists)
-	if err != nil {
-		return err
-	}
+		var exists bool
+		err := tx.QueryRow(query, user.UserID).Scan(&exists)
+		if err != nil {
+			return err
+		}
 
-	if !exists {
-		friendId := utils.GenerateUniqueFriendId(r.db, false)
-		user.FriendId = friendId
-	}
+		if !exists {
+			friendId := utils.GenerateUniqueFriendId(r.db, false)
+			user.FriendId = friendId
+		}
 
-	query := `
-		INSERT INTO user_basic_info (user_id, numero, nombre, apellido, friend_id)
-		VALUES ($1, $2, $3, $4, $5)
-		ON CONFLICT (user_id) DO UPDATE
-		SET nombre = $3, apellido = $4`
+		if exists {
+			// Actualizar información existente
+			query = `
+				UPDATE user_basic_info
+				SET numero = $1, nombre = $2, apellido = $3
+				WHERE user_id = $4`
 
-	_, err = r.db.Exec(query,
-		user.UserID, user.Numero, user.Nombre, user.Apellido, user.FriendId,
-	)
-	return err
+			_, err = tx.Exec(query, user.Numero, user.Nombre, user.Apellido, user.UserID)
+			return err
+		} else {
+			// Crear nueva información
+			query = `
+				INSERT INTO user_basic_info (user_id, numero, nombre, apellido, friend_id)
+				VALUES ($1, $2, $3, $4, $5)`
 
+			_, err = tx.Exec(query, user.UserID, user.Numero, user.Nombre, user.Apellido, user.FriendId)
+			return err
+		}
+	})
 }
 
 func (r *UserRepository) GetUserProfile(userID string) (*models.UserProfile, error) {
@@ -247,44 +270,110 @@ func (r *UserRepository) GetUserProfile(userID string) (*models.UserProfile, err
 	return &profile, nil
 }
 
-func (r *UserRepository) UpdateUserProfile(profile *models.UserProfile) error {
+func (r *UserRepository) CreateUserProfile(profile *models.UserProfile) error {
+	return database.WithTransaction(r.db, func(tx *sql.Tx) error {
+		// Verificar si ya existe un perfil para este usuario
+		query := `
+			SELECT EXISTS (
+				SELECT 1 FROM user_profile WHERE user_id = $1
+			)`
 
-	query := `
-		INSERT INTO user_profile (user_id, slogan, cabello, vestimenta, barba, detalle_facial, detalle_adicional)
-		VALUES ($1, $2, $3, $4, $5, $6, $7)
-		ON CONFLICT (user_id) DO UPDATE
-		SET slogan = $2, cabello = $3, vestimenta = $4, barba = $5, detalle_facial = $6, detalle_adicional = $7`
+		var exists bool
+		err := tx.QueryRow(query, profile.UserID).Scan(&exists)
+		if err != nil {
+			return err
+		}
 
-	_, err := r.db.Exec(query,
-		profile.UserID, profile.Slogan, profile.Cabello, profile.Vestimenta,
-		profile.Barba, profile.DetalleFacial, profile.DetalleAdicional,
-	)
-	return err
+		if exists {
+			// Actualizar perfil existente
+			query = `
+				UPDATE user_profile
+				SET slogan = $1, cabello = $2, vestimenta = $3, barba = $4, detalle_facial = $5, detalle_adicional = $6
+				WHERE user_id = $7`
 
+			_, err = tx.Exec(query, profile.Slogan, profile.Cabello, profile.Vestimenta, profile.Barba, profile.DetalleFacial, profile.DetalleAdicional, profile.UserID)
+			return err
+		} else {
+			// Crear nuevo perfil
+			query = `
+				INSERT INTO user_profile (user_id, slogan, cabello, vestimenta, barba, detalle_facial, detalle_adicional)
+				VALUES ($1, $2, $3, $4, $5, $6, $7)`
+
+			_, err = tx.Exec(query, profile.UserID, profile.Slogan, profile.Cabello, profile.Vestimenta, profile.Barba, profile.DetalleFacial, profile.DetalleAdicional)
+			return err
+		}
+	})
 }
 
 func (r *UserRepository) EditUserProfile(profile *models.EditProfile) error {
+	return database.WithTransaction(r.db, func(tx *sql.Tx) error {
+		// Verificar si ya existe un perfil para este usuario
+		query := `
+			SELECT EXISTS (
+				SELECT 1 FROM user_profile WHERE user_id = $1
+			)`
 
-	query := `
-		UPDATE user_profile
-		SET slogan = $2
-		WHERE user_id = $1`
+		var exists bool
+		err := tx.QueryRow(query, profile.UserID).Scan(&exists)
+		if err != nil {
+			return err
+		}
 
-	_, err := r.db.Exec(query, profile.UserID, profile.Slogan)
+		if !exists {
+			return errors.New("el perfil no existe")
+		}
 
-	if err != nil {
+		// Construir la consulta dinámicamente basada en los campos proporcionados
+		query = "UPDATE user_profile SET "
+		params := []interface{}{}
+		paramCount := 1
+
+		if profile.Slogan != nil {
+			query += fmt.Sprintf("slogan = $%d, ", paramCount)
+			params = append(params, *profile.Slogan)
+			paramCount++
+		}
+
+		if profile.Cabello != nil {
+			query += fmt.Sprintf("cabello = $%d, ", paramCount)
+			params = append(params, *profile.Cabello)
+			paramCount++
+		}
+
+		if profile.Vestimenta != nil {
+			query += fmt.Sprintf("vestimenta = $%d, ", paramCount)
+			params = append(params, *profile.Vestimenta)
+			paramCount++
+		}
+
+		if profile.Barba != nil {
+			query += fmt.Sprintf("barba = $%d, ", paramCount)
+			params = append(params, *profile.Barba)
+			paramCount++
+		}
+
+		if profile.DetalleFacial != nil {
+			query += fmt.Sprintf("detalle_facial = $%d, ", paramCount)
+			params = append(params, *profile.DetalleFacial)
+			paramCount++
+		}
+
+		if profile.DetalleAdicional != nil {
+			query += fmt.Sprintf("detalle_adicional = $%d, ", paramCount)
+			params = append(params, *profile.DetalleAdicional)
+			paramCount++
+		}
+
+		// Eliminar la última coma y espacio
+		query = query[:len(query)-2]
+
+		// Añadir la condición WHERE
+		query += fmt.Sprintf(" WHERE user_id = $%d", paramCount)
+		params = append(params, profile.UserID)
+
+		_, err = tx.Exec(query, params...)
 		return err
-	}
-
-	query = `
-		UPDATE user_basic_info
-
-		SET nombre = $2, apellido = $3
-		WHERE user_id = $1`
-
-	_, err = r.db.Exec(query, profile.UserID, profile.Nombre, profile.Apellido)
-
-	return err
+	})
 }
 
 func (r *UserRepository) GetUserStats(userID string) (*models.UserStats, error) {
@@ -310,58 +399,73 @@ func (r *UserRepository) GetUserStats(userID string) (*models.UserStats, error) 
 }
 
 func (r *UserRepository) UpdateUserStats(stats *models.UserStats) error {
-	query := `
-		INSERT INTO user_stats (
-			user_id, puntos, acciones, torneos_participados, cantidad_amigos,
-			es_dueno_torneo
-		) VALUES ($1, $2, $3, $4, $5, $6)
-		ON CONFLICT (user_id) DO UPDATE
-		SET puntos = $2, acciones = $3, torneos_participados = $4, cantidad_amigos = $5,
-			es_dueno_torneo = $6
-	`
+	return database.WithTransaction(r.db, func(tx *sql.Tx) error {
+		// Verificar si ya existen estadísticas para este usuario
+		query := `
+			SELECT EXISTS (
+				SELECT 1 FROM user_stats WHERE user_id = $1
+			)`
 
-	_, err := r.db.Exec(query,
-		stats.UserID, stats.Puntos, stats.Acciones, stats.TorneosParticipados,
-		stats.CantidadAmigos, stats.EsDuenoTorneo,
-	)
-	if err != nil {
-		fmt.Println("SQL Execution Error:", err)
-	}
-	return err
+		var exists bool
+		err := tx.QueryRow(query, stats.UserID).Scan(&exists)
+		if err != nil {
+			return err
+		}
+
+		if exists {
+			// Actualizar estadísticas existentes
+			query = `
+				UPDATE user_stats
+				SET puntos = $1, acciones = $2, torneos_participados = $3, cantidad_amigos = $4, 
+					es_dueno_torneo = $5, torneos_ganados = $6, pending_medalla = $7, pending_amigo = $8
+				WHERE user_id = $9`
+
+			_, err = tx.Exec(query, stats.Puntos, stats.Acciones, stats.TorneosParticipados,
+				stats.CantidadAmigos, stats.EsDuenoTorneo, stats.TorneosGanados,
+				stats.PendingMedalla, stats.PendingAmigo, stats.UserID)
+			return err
+		} else {
+			// Crear nuevas estadísticas
+			query = `
+				INSERT INTO user_stats (user_id, puntos, acciones, torneos_participados, cantidad_amigos, 
+					es_dueno_torneo, torneos_ganados, pending_medalla, pending_amigo)
+				VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`
+
+			_, err = tx.Exec(query, stats.UserID, stats.Puntos, stats.Acciones, stats.TorneosParticipados,
+				stats.CantidadAmigos, stats.EsDuenoTorneo, stats.TorneosGanados,
+				stats.PendingMedalla, stats.PendingAmigo)
+			return err
+		}
+	})
 }
 
 func (r *UserRepository) UpdateUserPendingMedalla(pending int, userID string) error {
-	query := `
-		INSERT INTO user_stats (
-			user_id, pending_medalla
-		) VALUES ($1, $2)
-		ON CONFLICT (user_id) DO UPDATE
-		SET pending_medalla = user_stats.pending_medalla + $2`
+	return database.WithTransaction(r.db, func(tx *sql.Tx) error {
+		query := `
+			UPDATE user_stats
+			SET pending_medalla = $1
+			WHERE user_id = $2`
 
-	_, err := r.db.Exec(query, userID, pending)
-	if err != nil {
-		fmt.Println("SQL Execution Error:", err)
-	}
-	return err
+		_, err := tx.Exec(query, pending, userID)
+		return err
+	})
 }
 
 func (r *UserRepository) UpdateUserPendingAmigo(pending int, userID string) error {
-	query := `
-		INSERT INTO user_stats (
-			user_id, pending_amigo
-		) VALUES ($1, $2)
-		ON CONFLICT (user_id) DO UPDATE
-		SET pending_amigo = $2`
+	return database.WithTransaction(r.db, func(tx *sql.Tx) error {
+		query := `
+			UPDATE user_stats
+			SET pending_amigo = $1
+			WHERE user_id = $2`
 
-	_, err := r.db.Exec(query,
-		userID, pending,
-	)
-	return err
+		_, err := tx.Exec(query, pending, userID)
+		return err
+	})
 }
 
 func (r *UserRepository) GetRanking() ([]models.UserRanking, error) {
 	query := `
-		SELECT 
+		SELECT
 			us.user_id,
 			us.puntos,
 			us.acciones,
@@ -376,10 +480,28 @@ func (r *UserRepository) GetRanking() ([]models.UserRanking, error) {
 			ub.nombre,
 			ub.apellido
 		FROM user_stats us
-		LEFT JOIN user_profile up ON us.user_id = up.user_id
-		LEFT JOIN user_basic_info ub ON us.user_id = ub.user_id
-		ORDER BY us.puntos DESC`
-
+		LEFT JOIN user_profile up
+		ON us.user_id = up.user_id
+		LEFT JOIN user_basic_info ub
+		ON us.user_id = ub.user_id
+		WHERE ub.nombre IS NOT NULL
+		AND ub.nombre <> ''
+		AND ub.apellido IS NOT NULL
+		AND ub.apellido <> ''
+		AND up.slogan IS NOT NULL
+		AND up.slogan <> ''
+		AND up.cabello IS NOT NULL
+		AND up.cabello <> ''
+		AND up.vestimenta IS NOT NULL
+		AND up.vestimenta <> ''
+		AND up.barba IS NOT NULL
+		AND up.barba <> ''
+		AND up.detalle_facial IS NOT NULL
+		AND up.detalle_facial <> ''
+		AND up.detalle_adicional IS NOT NULL
+		AND up.detalle_adicional <> ''
+		ORDER BY us.puntos DESC;
+`
 	rows, err := r.db.Query(query)
 	if err != nil {
 		return nil, err

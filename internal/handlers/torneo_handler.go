@@ -3,6 +3,7 @@ package handlers
 import (
 	"backend_proyecto_verde/internal/models"
 	"backend_proyecto_verde/internal/repository/postgres"
+	"backend_proyecto_verde/internal/utils"
 	"database/sql"
 	"encoding/json"
 	"net/http"
@@ -22,18 +23,16 @@ func NewTorneoHandler(repo *postgres.TorneoRepository) *TorneoHandler {
 func (h *TorneoHandler) CreateTorneo(w http.ResponseWriter, r *http.Request) {
 	var torneo models.Torneo
 	if err := json.NewDecoder(r.Body).Decode(&torneo); err != nil {
-		http.Error(w, "Error al decodificar el cuerpo de la solicitud", http.StatusBadRequest)
+		utils.RespondWithBadRequest(w, "Error al decodificar el cuerpo de la solicitud", err.Error())
 		return
 	}
 
 	if err := h.repo.CreateTorneo(&torneo); err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		utils.RespondWithDatabaseError(w, "Error al crear el torneo", err.Error())
 		return
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(http.StatusCreated)
-	json.NewEncoder(w).Encode(torneo)
+	utils.RespondWithCreated(w, torneo, "Torneo creado correctamente")
 }
 
 func (h *TorneoHandler) GetTorneo(w http.ResponseWriter, r *http.Request) {
@@ -42,12 +41,11 @@ func (h *TorneoHandler) GetTorneo(w http.ResponseWriter, r *http.Request) {
 
 	torneo, err := h.repo.GetTorneoByID(id)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusNotFound)
+		utils.RespondWithNotFound(w, "Torneo no encontrado", "No se encontró el torneo con el ID proporcionado")
 		return
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(torneo)
+	utils.RespondWithSuccess(w, torneo, "Torneo obtenido correctamente")
 }
 
 func (h *TorneoHandler) GetTorneoAdmin(w http.ResponseWriter, r *http.Request) {
@@ -56,12 +54,11 @@ func (h *TorneoHandler) GetTorneoAdmin(w http.ResponseWriter, r *http.Request) {
 
 	torneo, err := h.repo.GetTorneoByAdminID(id)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusNotFound)
+		utils.RespondWithNotFound(w, "Torneo no encontrado", "No se encontró el torneo con el ID proporcionado")
 		return
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(torneo)
+	utils.RespondWithSuccess(w, torneo, "Torneo obtenido correctamente")
 }
 
 func (h *TorneoHandler) UpdateTorneo(w http.ResponseWriter, r *http.Request) {
@@ -70,18 +67,17 @@ func (h *TorneoHandler) UpdateTorneo(w http.ResponseWriter, r *http.Request) {
 
 	var torneo models.Torneo
 	if err := json.NewDecoder(r.Body).Decode(&torneo); err != nil {
-		http.Error(w, "Error al decodificar el cuerpo de la solicitud", http.StatusBadRequest)
+		utils.RespondWithBadRequest(w, "Error al decodificar el cuerpo de la solicitud", err.Error())
 		return
 	}
 
 	torneo.ID = id
 	if err := h.repo.UpdateTorneo(&torneo); err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		utils.RespondWithDatabaseError(w, "Error al actualizar el torneo", err.Error())
 		return
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(torneo)
+	utils.RespondWithSuccess(w, torneo, "Torneo actualizado correctamente")
 }
 
 func (h *TorneoHandler) ListTorneos(w http.ResponseWriter, r *http.Request) {
@@ -94,55 +90,45 @@ func (h *TorneoHandler) ListTorneos(w http.ResponseWriter, r *http.Request) {
 
 	torneos, err := h.repo.ListTorneos(limit, offset)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		utils.RespondWithDatabaseError(w, "Error al obtener la lista de torneos", err.Error())
 		return
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(torneos)
+	utils.RespondWithSuccess(w, torneos, "Lista de torneos obtenida correctamente")
 }
 
 func (h *TorneoHandler) GetTorneoStats(w http.ResponseWriter, r *http.Request) {
-	//vars := mux.Vars(r)
-	//id := vars["id"]
-
-	// Implementar lógica para obtener estadísticas
-	w.Header().Set("Content-Type", "application/json")
-	// TODO: Implementar obtención de estadísticas
+	// Esta función aún no está implementada en el repositorio
+	// Devolvemos una respuesta vacía por ahora
+	utils.RespondWithSuccess(w, []models.TorneoEstadisticas{}, "No hay estadísticas disponibles")
 }
 
 func (h *TorneoHandler) TerminarTorneo(w http.ResponseWriter, r *http.Request) {
 	vars := mux.Vars(r)
 	id := vars["id"]
 
-	err := h.repo.TerminarTorneo(id)
-	if err != nil {
-		if err == sql.ErrNoRows {
-			http.Error(w, "Torneo no encontrado o no tienes permisos para terminarlo", http.StatusNotFound)
-			return
-		}
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+	if err := h.repo.TerminarTorneo(id); err != nil {
+		utils.RespondWithDatabaseError(w, "Error al finalizar el torneo", err.Error())
 		return
 	}
 
-	w.WriteHeader(http.StatusOK)
+	utils.RespondWithSuccess(w, nil, "Torneo finalizado correctamente")
 }
 
 func (h *TorneoHandler) BorrarTorneo(w http.ResponseWriter, r *http.Request) {
 	vars := mux.Vars(r)
 	id := vars["id"]
 
-	err := h.repo.BorrarTorneoEstadisticas(id)
-	if err != nil {
+	if err := h.repo.BorrarTorneoEstadisticas(id); err != nil {
 		if err == sql.ErrNoRows {
-			http.Error(w, "Torneo no encontrado o no tienes permisos para borrarlo", http.StatusNotFound)
-			return
+			utils.RespondWithNotFound(w, "Torneo no encontrado", "No se encontró el torneo con el ID proporcionado")
+		} else {
+			utils.RespondWithDatabaseError(w, "Error al borrar las estadísticas del torneo", err.Error())
 		}
-		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
 
-	w.WriteHeader(http.StatusOK)
+	utils.RespondWithSuccess(w, nil, "Torneo eliminado correctamente")
 }
 
 func (h *TorneoHandler) InscribirUsuario(w http.ResponseWriter, r *http.Request) {
@@ -153,22 +139,14 @@ func (h *TorneoHandler) InscribirUsuario(w http.ResponseWriter, r *http.Request)
 		UserID string `json:"user_id"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
-		http.Error(w, "Error al decodificar el cuerpo de la solicitud", http.StatusBadRequest)
+		utils.RespondWithBadRequest(w, "Error al decodificar el cuerpo de la solicitud", err.Error())
 		return
 	}
 
-	err := h.repo.InscribirUsuario(codeID, body.UserID)
-	if err != nil {
-		switch err.Error() {
-		case "torneo no encontrado":
-			http.Error(w, err.Error(), http.StatusNotFound)
-		case "el torneo ya está finalizado", "el usuario ya está inscrito en este torneo":
-			http.Error(w, err.Error(), http.StatusBadRequest)
-		default:
-			http.Error(w, err.Error(), http.StatusInternalServerError)
-		}
+	if err := h.repo.InscribirUsuario(codeID, body.UserID); err != nil {
+		utils.RespondWithDatabaseError(w, "Error al inscribir el usuario", err.Error())
 		return
 	}
 
-	w.WriteHeader(http.StatusOK)
+	utils.RespondWithCreated(w, nil, "Usuario inscrito correctamente")
 }

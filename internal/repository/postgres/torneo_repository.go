@@ -3,6 +3,7 @@ package postgres
 import (
 	"backend_proyecto_verde/internal/models"
 	"backend_proyecto_verde/internal/utils"
+	"backend_proyecto_verde/pkg/database"
 	"database/sql"
 	"fmt"
 )
@@ -18,42 +19,42 @@ func NewTorneoRepository(db *sql.DB) *TorneoRepository {
 func (r *TorneoRepository) CreateTorneo(torneo *models.Torneo) error {
 	torneo.CodeID = utils.GenerateUniqueFriendId(r.db, true)
 
-	query := `
-		INSERT INTO torneos (
-			nombre, id_creator, modalidad, ubicacion_a_latitud, ubicacion_a_longitud,
-			nombre_ubicacion_a, ubicacion_b_latitud, ubicacion_b_longitud,
-			nombre_ubicacion_b, fecha_inicio, fecha_fin, ubicacion_aproximada,
-			metros_aproximados, code_id
-		) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
-		RETURNING id`
+	return database.WithTransaction(r.db, func(tx *sql.Tx) error {
+		query := `
+			INSERT INTO torneos (
+				nombre, id_creator, modalidad, ubicacion_a_latitud, ubicacion_a_longitud,
+				nombre_ubicacion_a, ubicacion_b_latitud, ubicacion_b_longitud,
+				nombre_ubicacion_b, fecha_inicio, fecha_fin, ubicacion_aproximada,
+				metros_aproximados, code_id
+			) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
+			RETURNING id`
 
-	err := r.db.QueryRow(
-		query,
-		torneo.Nombre,
-		torneo.IDCreator,
-		torneo.Modalidad,
-		torneo.UbicacionALatitud,
-		torneo.UbicacionALongitud,
-		torneo.NombreUbicacionA,
-		torneo.UbicacionBLatitud,
-		torneo.UbicacionBLongitud,
-		torneo.NombreUbicacionB,
-		torneo.FechaInicio,
-		torneo.FechaFin,
-		torneo.UbicacionAproximada,
-		torneo.MetrosAprox,
-		torneo.CodeID, // Se agregó el valor faltante
-	).Scan(&torneo.ID)
+		err := tx.QueryRow(
+			query,
+			torneo.Nombre,
+			torneo.IDCreator,
+			torneo.Modalidad,
+			torneo.UbicacionALatitud,
+			torneo.UbicacionALongitud,
+			torneo.NombreUbicacionA,
+			torneo.UbicacionBLatitud,
+			torneo.UbicacionBLongitud,
+			torneo.NombreUbicacionB,
+			torneo.FechaInicio,
+			torneo.FechaFin,
+			torneo.UbicacionAproximada,
+			torneo.MetrosAprox,
+			torneo.CodeID,
+		).Scan(&torneo.ID)
 
-	if err != nil {
-		return fmt.Errorf("error al crear torneo: %w", err)
-	}
-	_, err = r.db.Exec(`UPDATE user_stats SET es_dueno_torneo = true WHERE user_id = $1`, torneo.IDCreator)
-	if err != nil {
-		return fmt.Errorf("error al actualizar es_dueno_torneo: %w", err)
-	}
-	return nil
+		if err != nil {
+			return fmt.Errorf("error al crear torneo: %w", err)
+		}
+
+		return nil
+	})
 }
+
 func (r *TorneoRepository) GetTorneoByID(id string) (*models.Torneo, error) {
 	query := `
 		SELECT id, nombre, modalidad, ubicacion_a_latitud, ubicacion_a_longitud,
@@ -105,26 +106,38 @@ func (r *TorneoRepository) GetTorneoByAdminID(id string) (*models.Torneo, error)
 }
 
 func (r *TorneoRepository) UpdateTorneo(torneo *models.Torneo) error {
-	query := `
-		UPDATE torneos
-		SET nombre = $1, modalidad = $2, ubicacion_a_latitud = $3,
-			ubicacion_a_longitud = $4, nombre_ubicacion_a = $5,
-			ubicacion_b_latitud = $6, ubicacion_b_longitud = $7,
-			nombre_ubicacion_b = $8, fecha_inicio = $9, fecha_fin = $10,
-			ubicacion_aproximada = $11, metros_aproximados = $12,
-			finalizado = $13, ganador_versus = $14, ganador_individual = $15
-		WHERE id = $16`
+	return database.WithTransaction(r.db, func(tx *sql.Tx) error {
+		query := `
+			UPDATE torneos
+			SET nombre = $1, modalidad = $2, ubicacion_a_latitud = $3, ubicacion_a_longitud = $4,
+				nombre_ubicacion_a = $5, ubicacion_b_latitud = $6, ubicacion_b_longitud = $7,
+				nombre_ubicacion_b = $8, fecha_inicio = $9, fecha_fin = $10, ubicacion_aproximada = $11,
+				metros_aproximados = $12
+			WHERE id = $13`
 
-	_, err := r.db.Exec(query,
-		torneo.Nombre, torneo.Modalidad,
-		torneo.UbicacionALatitud, torneo.UbicacionALongitud,
-		torneo.NombreUbicacionA, torneo.UbicacionBLatitud,
-		torneo.UbicacionBLongitud, torneo.NombreUbicacionB,
-		torneo.FechaInicio, torneo.FechaFin,
-		torneo.UbicacionAproximada, torneo.MetrosAprox,
-		torneo.Finalizado, torneo.GanadorVersus,
-		torneo.GanadorIndividual, torneo.ID)
-	return err
+		_, err := tx.Exec(
+			query,
+			torneo.Nombre,
+			torneo.Modalidad,
+			torneo.UbicacionALatitud,
+			torneo.UbicacionALongitud,
+			torneo.NombreUbicacionA,
+			torneo.UbicacionBLatitud,
+			torneo.UbicacionBLongitud,
+			torneo.NombreUbicacionB,
+			torneo.FechaInicio,
+			torneo.FechaFin,
+			torneo.UbicacionAproximada,
+			torneo.MetrosAprox,
+			torneo.ID,
+		)
+
+		if err != nil {
+			return fmt.Errorf("error al actualizar torneo: %w", err)
+		}
+
+		return nil
+	})
 }
 
 func (r *TorneoRepository) ListTorneos(limit, offset int) ([]models.Torneo, error) {
@@ -159,248 +172,277 @@ func (r *TorneoRepository) ListTorneos(limit, offset int) ([]models.Torneo, erro
 }
 
 func (r *TorneoRepository) TerminarTorneo(idCreator string) error {
+	return database.WithTransaction(r.db, func(tx *sql.Tx) error {
+		// Obtener el torneo
+		query := `
+			SELECT id, modalidad
+			FROM torneos
+			WHERE id_creator = $1 AND finalizado = false`
 
-	var torneoID string
-	err := r.db.QueryRow(`
-		SELECT id FROM torneos
-		WHERE id_creator = $1
-	`, idCreator).Scan(&torneoID)
-	if err != nil {
-		return err
-	}
-
-	// Verificar que el torneo exista y pertenezca al creador
-	var modalidad string
-	err = r.db.QueryRow(`
-		SELECT modalidad FROM torneos
-		WHERE id = $1
-	`, torneoID).Scan(&modalidad)
-	if err != nil {
-		return err
-	}
-
-	if modalidad == "Versus" {
-		// Obtener las estadísticas del torneo
-		rows, err := r.db.Query(`
-			SELECT id_jugador, equipo, puntos
-			FROM torneo_estadisticas
-			WHERE id_torneo = $1 AND habilitado = true
-		`, torneoID)
+		var torneoID, modalidad string
+		err := tx.QueryRow(query, idCreator).Scan(&torneoID, &modalidad)
 		if err != nil {
-			return err
-		}
-		defer rows.Close()
-
-		// Separar jugadores por equipo y sumar puntos
-		equipoA := make(map[string]int)
-		equipoB := make(map[string]int)
-		puntosEquipoA := 0
-		puntosEquipoB := 0
-
-		for rows.Next() {
-			var idJugador string
-			var equipo bool
-			var puntos int
-			if err := rows.Scan(&idJugador, &equipo, &puntos); err != nil {
-				return err
+			if err == sql.ErrNoRows {
+				return fmt.Errorf("no se encontró un torneo activo para este usuario")
 			}
-
-			if equipo {
-				equipoB[idJugador] = puntos
-				puntosEquipoB += puntos
-			} else {
-				equipoA[idJugador] = puntos
-				puntosEquipoA += puntos
-			}
+			return fmt.Errorf("error al buscar torneo: %w", err)
 		}
 
-		// Determinar el equipo ganador
-		equipoGanador := puntosEquipoA > puntosEquipoB
-
-		// Actualizar el torneo con el ganador
-		_, err = r.db.Exec(`
+		// Marcar el torneo como finalizado
+		updateQuery := `
 			UPDATE torneos
-			SET finalizado = true, ganador_versus = $1
-			WHERE id = $2
-		`, equipoGanador, torneoID)
+			SET finalizado = true
+			WHERE id = $1`
+
+		_, err = tx.Exec(updateQuery, torneoID)
 		if err != nil {
-			return err
+			return fmt.Errorf("error al finalizar torneo: %w", err)
 		}
 
-		// Actualizar estadísticas de los jugadores
-		tx, err := r.db.Begin()
-		if err != nil {
-			return err
-		}
-		defer tx.Rollback()
+		// Si es modalidad "Versus", determinar el ganador
+		if modalidad == "Versus" {
+			// Obtener puntos de cada equipo
+			statsQuery := `
+				SELECT equipo, SUM(puntos) as total_puntos
+				FROM torneo_estadisticas
+				WHERE id_torneo = $1
+				GROUP BY equipo`
 
-		// Actualizar torneos_participados para todos los jugadores
-		for idJugador := range equipoA {
-			_, err = tx.Exec(`
-				UPDATE user_stats
-				SET torneos_participados = torneos_participados + 1
-				WHERE user_id = $1
-			`, idJugador)
+			rows, err := tx.Query(statsQuery, torneoID)
 			if err != nil {
-				return err
+				return fmt.Errorf("error al obtener estadísticas: %w", err)
+			}
+			defer rows.Close()
+
+			var equipoA, equipoB bool
+			var puntosA, puntosB int
+
+			for rows.Next() {
+				var equipo bool
+				var puntos int
+				if err := rows.Scan(&equipo, &puntos); err != nil {
+					return fmt.Errorf("error al leer estadísticas: %w", err)
+				}
+
+				if equipo {
+					equipoA = true
+					puntosA = puntos
+				} else {
+					equipoB = true
+					puntosB = puntos
+				}
+			}
+
+			// Determinar ganador si ambos equipos tienen participantes
+			if equipoA && equipoB {
+				var ganador bool
+				if puntosA > puntosB {
+					ganador = true
+				} else {
+					ganador = false
+				}
+
+				// Actualizar ganador
+				updateGanadorQuery := `
+					UPDATE torneos
+					SET ganador_versus = $1
+					WHERE id = $2`
+
+				_, err = tx.Exec(updateGanadorQuery, ganador, torneoID)
+				if err != nil {
+					return fmt.Errorf("error al actualizar ganador: %w", err)
+				}
+
+				// Actualizar estadísticas de usuarios ganadores
+				updateStatsQuery := `
+					UPDATE user_stats
+					SET torneos_ganados = torneos_ganados + 1
+					FROM torneo_estadisticas
+					WHERE torneo_estadisticas.id_jugador = user_stats.user_id
+					AND torneo_estadisticas.id_torneo = $1
+					AND torneo_estadisticas.equipo = $2`
+
+				_, err = tx.Exec(updateStatsQuery, torneoID, ganador)
+				if err != nil {
+					return fmt.Errorf("error al actualizar estadísticas de usuarios: %w", err)
+				}
+			}
+		} else if modalidad == "Individual" {
+			// Para modalidad individual, determinar el ganador por puntos
+			statsQuery := `
+				SELECT id_jugador, puntos
+				FROM torneo_estadisticas
+				WHERE id_torneo = $1
+				ORDER BY puntos DESC
+				LIMIT 1`
+
+			var ganadorID string
+			var puntos int
+			err = tx.QueryRow(statsQuery, torneoID).Scan(&ganadorID, &puntos)
+			if err != nil && err != sql.ErrNoRows {
+				return fmt.Errorf("error al obtener ganador: %w", err)
+			}
+
+			if err != sql.ErrNoRows {
+				// Actualizar ganador
+				updateGanadorQuery := `
+					UPDATE torneos
+					SET ganador_individual = $1
+					WHERE id = $2`
+
+				_, err = tx.Exec(updateGanadorQuery, ganadorID, torneoID)
+				if err != nil {
+					return fmt.Errorf("error al actualizar ganador: %w", err)
+				}
+
+				// Actualizar estadísticas del usuario ganador
+				updateStatsQuery := `
+					UPDATE user_stats
+					SET torneos_ganados = torneos_ganados + 1
+					WHERE user_id = $1`
+
+				_, err = tx.Exec(updateStatsQuery, ganadorID)
+				if err != nil {
+					return fmt.Errorf("error al actualizar estadísticas del ganador: %w", err)
+				}
 			}
 		}
-		for idJugador := range equipoB {
-			_, err = tx.Exec(`
-				UPDATE user_stats
-				SET torneos_participados = torneos_participados + 1
-				WHERE user_id = $1
-			`, idJugador)
-			if err != nil {
-				return err
-			}
-		}
 
-		// Actualizar torneos_ganados para el equipo ganador
-		equipoGanadorMap := equipoA
-		if !equipoGanador {
-			equipoGanadorMap = equipoB
-		}
-		for idJugador := range equipoGanadorMap {
-			_, err = tx.Exec(`
-				UPDATE user_stats
-				SET torneos_ganados = torneos_ganados + 1
-				WHERE user_id = $1
-			`, idJugador)
-			if err != nil {
-				return err
-			}
-		}
-
-		// Deshabilitar todas las estadísticas del torneo
-		_, err = tx.Exec(`
-			UPDATE torneo_estadisticas
-			SET habilitado = false
-			WHERE id_torneo = $1
-		`, torneoID)
-		if err != nil {
-			return err
-		}
-
-		return tx.Commit()
-	}
-
-	return nil
+		return nil
+	})
 }
 
 func (r *TorneoRepository) BorrarTorneoEstadisticas(idCreator string) error {
+	return database.WithTransaction(r.db, func(tx *sql.Tx) error {
+		// Obtener el ID del torneo
+		query := `
+			SELECT id
+			FROM torneos
+			WHERE id_creator = $1 AND finalizado = false`
 
-	var torneoID string
-	err := r.db.QueryRow(`
-		SELECT id FROM torneos
-		WHERE id_creator = $1
-	`, idCreator).Scan(&torneoID)
-	if err != nil {
-		return err
-	}
+		var torneoID string
+		err := tx.QueryRow(query, idCreator).Scan(&torneoID)
+		if err != nil {
+			if err == sql.ErrNoRows {
+				return fmt.Errorf("no se encontró un torneo activo para este usuario")
+			}
+			return fmt.Errorf("error al buscar torneo: %w", err)
+		}
 
-	// Verificar que el torneo exista y pertenezca al creador
-	var exists bool
-	err = r.db.QueryRow(`
-		SELECT EXISTS(SELECT 1 FROM torneos WHERE id = $1 AND id_creator = $2)
-	`, torneoID, idCreator).Scan(&exists)
-	if err != nil {
-		return err
-	}
-	if !exists {
-		return sql.ErrNoRows
-	}
+		// Eliminar estadísticas del torneo
+		deleteQuery := `
+			DELETE FROM torneo_estadisticas
+			WHERE id_torneo = $1`
 
-	_, err = r.db.Exec(`
-		UPDATE torneos
-		SET finalizado = true
-		WHERE id = $1
-	`, torneoID)
-	if err != nil {
-		return err
-	}
+		_, err = tx.Exec(deleteQuery, torneoID)
+		if err != nil {
+			return fmt.Errorf("error al eliminar estadísticas: %w", err)
+		}
 
-	// Borrar todas las estadísticas del torneo
-	_, err = r.db.Exec(`
-		DELETE FROM torneo_estadisticas
-		WHERE id_torneo = $1
-	`, torneoID)
+		// Eliminar el torneo
+		deleteTorneoQuery := `
+			DELETE FROM torneos
+			WHERE id = $1`
 
-	if err != nil {
-		return err
-	}
-	_, err = r.db.Exec(`
-		UPDATE user_stats
-		SET es_dueno_torneo = false
-		WHERE user_id = $1
-	`, idCreator)
+		_, err = tx.Exec(deleteTorneoQuery, torneoID)
+		if err != nil {
+			return fmt.Errorf("error al eliminar torneo: %w", err)
+		}
 
-	return err
+		return nil
+	})
 }
 
 func (r *TorneoRepository) InscribirUsuario(codeID string, userID string) error {
-	// Obtener el torneo por code_id y verificar que esté habilitado
-	var torneoID string
-	var finalizado bool
-	var modalidad string
-	err := r.db.QueryRow(`
-		SELECT id, finalizado, modalidad 
-		FROM torneos 
-		WHERE code_id = $1
-	`, codeID).Scan(&torneoID, &finalizado, &modalidad)
-	if err != nil {
-		if err == sql.ErrNoRows {
-			return fmt.Errorf("torneo no encontrado")
+	return database.WithTransaction(r.db, func(tx *sql.Tx) error {
+		// Verificar si el torneo existe y no está finalizado
+		torneoQuery := `
+			SELECT id, modalidad
+			FROM torneos
+			WHERE code_id = $1 AND finalizado = false`
+
+		var torneoID, modalidad string
+		err := tx.QueryRow(torneoQuery, codeID).Scan(&torneoID, &modalidad)
+		if err != nil {
+			if err == sql.ErrNoRows {
+				return fmt.Errorf("torneo no encontrado o ya finalizado")
+			}
+			return fmt.Errorf("error al buscar torneo: %w", err)
 		}
-		return err
-	}
 
-	if finalizado {
-		return fmt.Errorf("el torneo ya está finalizado")
-	}
+		// Verificar si el usuario ya está inscrito
+		checkQuery := `
+			SELECT EXISTS (
+				SELECT 1 FROM torneo_estadisticas
+				WHERE id_torneo = $1 AND id_jugador = $2
+			)`
 
-	// Verificar si el usuario ya está inscrito
-	var exists bool
-	err = r.db.QueryRow(`
-		SELECT EXISTS(
-			SELECT 1 FROM torneo_estadisticas 
-			WHERE id_torneo = $1 AND id_jugador = $2
-		)
-	`, torneoID, userID).Scan(&exists)
-	if err != nil {
-		return err
-	}
-	if exists {
-		return fmt.Errorf("el usuario ya está inscrito en este torneo")
-	}
+		var exists bool
+		err = tx.QueryRow(checkQuery, torneoID, userID).Scan(&exists)
+		if err != nil {
+			return fmt.Errorf("error al verificar inscripción: %w", err)
+		}
 
-	// Iniciar transacción
-	tx, err := r.db.Begin()
-	if err != nil {
-		return err
-	}
-	defer tx.Rollback()
+		if exists {
+			return fmt.Errorf("el usuario ya está inscrito en este torneo")
+		}
 
-	// Insertar en torneo_estadisticas
-	_, err = tx.Exec(`
-		INSERT INTO torneo_estadisticas (
-			id_jugador, id_torneo, modalidad, puntos, 
-			equipo, habilitado
-		) VALUES ($1, $2, $3, 0, false, true)
-	`, userID, torneoID, modalidad)
-	if err != nil {
-		return err
-	}
+		// Determinar el equipo para modalidad "Versus"
+		var equipo bool
+		if modalidad == "Versus" {
+			// Contar usuarios en cada equipo
+			countQuery := `
+				SELECT equipo, COUNT(*) as total
+				FROM torneo_estadisticas
+				WHERE id_torneo = $1
+				GROUP BY equipo`
 
-	// Actualizar user_stats con el id del torneo
-	_, err = tx.Exec(`
-		UPDATE user_stats 
-		SET torneo_id = $1 
-		WHERE user_id = $2
-	`, torneoID, userID)
-	if err != nil {
-		return err
-	}
+			rows, err := tx.Query(countQuery, torneoID)
+			if err != nil {
+				return fmt.Errorf("error al contar equipos: %w", err)
+			}
+			defer rows.Close()
 
-	return tx.Commit()
+			var equipoACount, equipoBCount int
+			for rows.Next() {
+				var eq bool
+				var count int
+				if err := rows.Scan(&eq, &count); err != nil {
+					return fmt.Errorf("error al leer conteo: %w", err)
+				}
+
+				if eq {
+					equipoACount = count
+				} else {
+					equipoBCount = count
+				}
+			}
+
+			// Asignar al equipo con menos jugadores
+			equipo = equipoACount <= equipoBCount
+		}
+
+		// Inscribir al usuario
+		insertQuery := `
+			INSERT INTO torneo_estadisticas (id_jugador, equipo, id_torneo, modalidad, puntos, habilitado)
+			VALUES ($1, $2, $3, $4, 0, true)`
+
+		_, err = tx.Exec(insertQuery, userID, equipo, torneoID, modalidad)
+		if err != nil {
+			return fmt.Errorf("error al inscribir usuario: %w", err)
+		}
+
+		// Actualizar estadísticas del usuario
+		updateStatsQuery := `
+			UPDATE user_stats
+			SET torneos_participados = torneos_participados + 1
+			WHERE user_id = $1`
+
+		_, err = tx.Exec(updateStatsQuery, userID)
+		if err != nil {
+			return fmt.Errorf("error al actualizar estadísticas: %w", err)
+		}
+
+		return nil
+	})
 }
