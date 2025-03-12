@@ -1,5 +1,3 @@
-version: '3.8'
-
 services:
   app:
     build: .
@@ -11,6 +9,8 @@ services:
       - DB_USER=postgres
       - DB_PASSWORD=postgres
       - DB_NAME=proyecto_verde
+    volumes:
+      - ./.env:/app/.env
     depends_on:
       postgres:
         condition: service_healthy
