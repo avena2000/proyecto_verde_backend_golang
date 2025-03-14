@@ -76,9 +76,9 @@ func main() {
 	corsHandler := corsOptions.Handler(router)
 
 	// Iniciar servidor con middleware CORS
-	port := getEnv("PORT", "8080")
+	port := getEnv("PORT", "9001")
 	log.Printf("Servidor iniciado en el puerto %s", port)
-	if err := http.ListenAndServe(":"+port, corsHandler); err != nil {
+	if err := http.ListenAndServe("0.0.0.0:"+port, corsHandler); err != nil {
 		log.Fatalf("Error al iniciar el servidor: %v", err)
 	}
 }

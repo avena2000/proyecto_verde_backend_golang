@@ -3,6 +3,7 @@ package routes
 import (
 	"backend_proyecto_verde/internal/handlers"
 	"backend_proyecto_verde/internal/middleware"
+	"net/http"
 
 	"github.com/gorilla/mux"
 )
@@ -18,6 +19,18 @@ func SetupRoutes(
 
 	// Agregar middleware de logging
 	r.Use(middleware.LoggingMiddleware)
+
+	// Health check endpoint
+	r.HandleFunc("/health", func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		w.Write([]byte("OK"))
+	}).Methods("GET")
+
+	// Endpoint para verificar que las rutas /v1 funcionan
+	r.HandleFunc("/v1/health", func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		w.Write([]byte("API v1 está funcionando correctamente"))
+	}).Methods("GET")
 
 	// Rutas de usuario
 	r.HandleFunc("/api/users", userHandler.CreateUser).Methods("POST")
@@ -50,7 +63,7 @@ func SetupRoutes(
 	r.HandleFunc("/api/users/{user_id}/actions", userActionsHandler.CreateAction).Methods("POST")
 	r.HandleFunc("/api/users/{user_id}/actions", userActionsHandler.GetUserActions).Methods("GET")
 	r.HandleFunc("/api/actions/{id}", userActionsHandler.DeleteAction).Methods("DELETE")
-	r.HandleFunc("/api/actions", userActionsHandler.GetAllActions).Methods("GET")
+	r.HandleFunc("/v1/api/actions", userActionsHandler.GetAllActions).Methods("GET")
 
 	// Rutas de amigos
 	r.HandleFunc("/api/users/{user_id}/friends", userFriendsHandler.GetFriendsList).Methods("GET")

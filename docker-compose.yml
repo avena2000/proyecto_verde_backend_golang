@@ -2,6 +2,7 @@ services:
   reverse-proxy:
     image: traefik:v3.3.1
     command:
+      - "--log.level=DEBUG"
       - "--api.insecure=true"
       - "--providers.docker"
       - "--providers.docker.exposedbydefault=false"
@@ -12,6 +13,7 @@ services:
       - "--certificatesresolvers.myresolver.acme.email=avn2000inc@gmail.com"
       - "--certificatesresolvers.myresolver.acme.storage=/letsencrypt/acme.json"
       - "--certificatesresolvers.myresolver.acme.tlschallenge=true"
+      - "traefik.docker.network=traefik-network"
     ports:
       - "80:80"
       - "443:443"
@@ -19,14 +21,20 @@ services:
     volumes:
       - letsencrypt:/letsencrypt
       - /var/run/docker.sock:/var/run/docker.sock
-  app:
-    build: .
+    networks:
+      - traefik-network
+      - app-network
+  backend:
+    build:
+      context: .
     labels:
       - "traefik.enable=true"
-      - "traefik.http.routers.app.entrypoints=websecure"
-      - "traefik.http.routers.app.rule=Host(`vive.integra-expansion.com`)"
-      - "traefik.http.routers.app.tls.certresolver=myresolver"
-      - "traefik.http.services.app.loadbalancer.server.port=8080"
+      - "traefik.http.routers.backend.entrypoints=websecure"
+      - "traefik.http.routers.backend.rule=Host(`vive.integra-expansion.com`) && PathPrefix(`/v1`)"
+      - "traefik.http.routers.backend.tls.certresolver=myresolver"
+      - "traefik.http.services.backend.loadbalancer.server.port=9001"
+      - "traefik.http.routers.backend.service=backend"
+      - "traefik.docker.network=traefik-network"
     ports:
       - "9001:9001"
     environment:
@@ -41,6 +49,26 @@ services:
       postgres:
         condition: service_healthy
     networks:
+      - traefik-network
+      - app-network
+
+  frontend:
+    image: nginx:alpine
+    volumes:
+      - ./frontend:/usr/share/nginx/html
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.frontend.entrypoints=websecure"
+      - "traefik.http.routers.frontend.rule=Host(`vive.integra-expansion.com`) && PathPrefix(`/`)"
+      - "traefik.http.routers.frontend.priority=1"
+      - "traefik.http.routers.frontend.tls.certresolver=myresolver"
+      - "traefik.http.services.frontend.loadbalancer.server.port=80"
+      - "traefik.http.routers.frontend.service=frontend"
+      - "traefik.docker.network=traefik-network"
+    ports:
+      - "9000:80"
+    networks:
+      - traefik-network
       - app-network
 
   postgres:
@@ -66,5 +94,5 @@ volumes:
   letsencrypt:
 
 networks:
+  traefik-network:
   app-network:
-    driver: bridge
