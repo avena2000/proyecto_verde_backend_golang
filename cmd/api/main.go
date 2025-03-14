@@ -1,6 +1,7 @@
 package main
 
 import (
+	"backend_proyecto_verde/internal/config"
 	"backend_proyecto_verde/internal/handlers"
 	"backend_proyecto_verde/internal/repository/postgres"
 	"backend_proyecto_verde/internal/routes"
@@ -10,6 +11,7 @@ import (
 	"os"
 
 	"github.com/joho/godotenv"
+	"github.com/rs/cors"
 )
 
 func main() {
@@ -34,6 +36,12 @@ func main() {
 	}
 	defer db.Close()
 
+	// Inicializar la sesión de AWS
+	awsSession, err := config.InitAWSSession()
+	if err != nil {
+		log.Fatalf("Error al inicializar la sesión de AWS: %v", err)
+	}
+
 	// Inicializar repositorios
 	userRepo := postgres.NewUserRepository(db)
 	torneoRepo := postgres.NewTorneoRepository(db)
@@ -44,7 +52,7 @@ func main() {
 	// Inicializar handlers
 	userHandler := handlers.NewUserHandler(userRepo)
 	torneoHandler := handlers.NewTorneoHandler(torneoRepo)
-	userActionsHandler := handlers.NewUserActionsHandler(userActionsRepo, medallasRepo)
+	userActionsHandler := handlers.NewUserActionsHandler(userActionsRepo, medallasRepo, awsSession)
 	userFriendsHandler := handlers.NewUserFriendsHandler(userFriendsRepo)
 	medallasHandler := handlers.NewMedallasHandler(medallasRepo)
 
@@ -57,10 +65,20 @@ func main() {
 		medallasHandler,
 	)
 
-	// Iniciar servidor
+	// Configurar CORS usando rs/cors
+	corsOptions := cors.New(cors.Options{
+		AllowedOrigins:   []string{"*"},
+		AllowedMethods:   []string{"GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH"},
+		AllowCredentials: true,
+	})
+
+	// Aplicar middleware CORS al router
+	corsHandler := corsOptions.Handler(router)
+
+	// Iniciar servidor con middleware CORS
 	port := getEnv("PORT", "8080")
 	log.Printf("Servidor iniciado en el puerto %s", port)
-	if err := http.ListenAndServe(":"+port, router); err != nil {
+	if err := http.ListenAndServe(":"+port, corsHandler); err != nil {
 		log.Fatalf("Error al iniciar el servidor: %v", err)
 	}
 }

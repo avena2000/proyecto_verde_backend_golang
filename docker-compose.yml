@@ -1,6 +1,32 @@
 services:
+  reverse-proxy:
+    image: traefik:v3.3.1
+    command:
+      - "--api.insecure=true"
+      - "--providers.docker"
+      - "--providers.docker.exposedbydefault=false"
+      - "--entrypoints.websecure.address=:443"
+      - "--entrypoints.web.address=:80"
+      - "--entrypoints.web.http.redirections.entrypoint=websecure"
+      - "--entrypoints.web.http.redirections.entrypoint.scheme=https"
+      - "--certificatesresolvers.myresolver.acme.email=avn2000inc@gmail.com"
+      - "--certificatesresolvers.myresolver.acme.storage=/letsencrypt/acme.json"
+      - "--certificatesresolvers.myresolver.acme.tlschallenge=true"
+      - "--certificatesresolvers.myresolver.acme.httpchallenge.entrypoint=websecure"
+    ports:
+      - "80:80"
+      - "443:443"
+      - "8080:8080"
+    volumes:
+      - letsencrypt:/letsencrypt
+      - /var/run/docker.sock:/var/run/docker.sock
   app:
     build: .
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.app.entrypoints=websecure"
+      - "traefik.http.routers.app.rule=Host(`vive.integra-expansion.com`)"
+      - "traefik.http.routers.app.tls.certresolver=myresolver"
     ports:
       - "8020:8020"
     environment:
@@ -37,6 +63,7 @@ services:
 
 volumes:
   postgres-data:
+  letsencrypt:
 
 networks:
   app-network:
