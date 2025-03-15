@@ -31,6 +31,7 @@ services:
       - "traefik.enable=true"
       - "traefik.http.routers.backend.entrypoints=websecure"
       - "traefik.http.routers.backend.rule=Host(`vive.integra-expansion.com`) && PathPrefix(`/v1`)"
+      - "traefik.http.routers.backend.priority=2"
       - "traefik.http.routers.backend.tls.certresolver=myresolver"
       - "traefik.http.services.backend.loadbalancer.server.port=9001"
       - "traefik.http.routers.backend.service=backend"
