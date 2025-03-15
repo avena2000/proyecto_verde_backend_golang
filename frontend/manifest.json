@@ -1,11 +1,11 @@
 {
-    "name": "proyecto_verde_participativo",
-    "short_name": "proyecto_verde_participativo",
+    "name": "Proyecto Verde Participativo",
+    "short_name": "ViVe",
     "start_url": ".",
     "display": "standalone",
-    "background_color": "#hexcode",
-    "theme_color": "#hexcode",
-    "description": "A new Flutter project.",
+    "background_color": "#6e9d6b",
+    "theme_color": "#6e9d6b",
+    "description": "Aplicación para la participación ciudadana en áreas verdes",
     "orientation": "portrait-primary",
     "prefer_related_applications": false,
     "icons": [
