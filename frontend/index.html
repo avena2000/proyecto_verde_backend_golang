@@ -30,9 +30,9 @@
   <title>proyecto_verde_participativo</title>
   <link rel="manifest" href="manifest.json">
   
-  
-  <meta content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" name="viewport">
-  
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=1.0, user-scalable=no">
+  <meta name="theme-color" content="#1E4C3C"/>
+    
   
   
   
@@ -195,7 +195,7 @@
 
   // Track how PWA was launched (either from browser or as PWA)
   function getLaunchMode() {
-    const isStandalone = window.matchMedia('(display-mode: standalone)').matches;
+    const isStandalone = window.matchMedia('(display-mode: fullscreen)').matches || window.matchMedia('(display-mode: standalone)').matches;
     if(deferredPrompt) hasPrompt();
     if (document.referrer.startsWith('android-app://')) {
       appLaunchedAsTWA();
