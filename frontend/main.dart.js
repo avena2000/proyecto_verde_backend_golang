@@ -29833,7 +29833,7 @@ case 4:n=o.b
 o=n==null
 m=o?null:n.c
 A.dY().$1("kIsWeb - Modo de lanzamiento: "+(m==null?"no detectado":m))
-s=(o?null:n.e)===!1?5:6
+s=(o?null:n.e)===!0?5:6
 break
 case 5:A.dY().$1("Omitiendo pantalla de instalaci\xf3n, continuando con la aplicaci\xf3n normal")
 j=A
