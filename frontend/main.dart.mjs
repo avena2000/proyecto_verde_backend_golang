@@ -478,6 +478,8 @@ class CompiledApp {
       _1652: (x0,x1) => x0.getItem(x1),
       _1653: (x0,x1) => x0.removeItem(x1),
       _1654: (x0,x1,x2) => x0.setItem(x1,x2),
+      _1658: x0 => ({name: x0}),
+      _1659: (x0,x1) => x0.query(x1),
       _1660: x0 => ({audio: x0}),
       _1661: (x0,x1) => x0.getUserMedia(x1),
       _1662: x0 => x0.getAudioTracks(),
