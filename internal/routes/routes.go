@@ -21,13 +21,13 @@ func SetupRoutes(
 	r.Use(middleware.LoggingMiddleware)
 
 	// Health check endpoint
-	r.HandleFunc("/health", func(w http.ResponseWriter, r *http.Request) {
+	r.HandleFunc("/api/health", func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
 		w.Write([]byte("OK"))
 	}).Methods("GET")
 
 	// Endpoint para verificar que las rutas /v1 funcionan
-	r.HandleFunc("/v1/health", func(w http.ResponseWriter, r *http.Request) {
+	r.HandleFunc("/v1/api/health", func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
 		w.Write([]byte("API v1 está funcionando correctamente"))
 	}).Methods("GET")
@@ -78,6 +78,8 @@ func SetupRoutes(
 	r.HandleFunc("/api/users/{user_id}/medallas/{medalla_id}", medallasHandler.AsignarMedalla).Methods("POST")
 	r.HandleFunc("/api/users/{user_id}/medallas/slogans", medallasHandler.GetSlogansMedallasGanadas).Methods("GET")
 	r.HandleFunc("/api/users/{user_id}/medallas/reset-pending", medallasHandler.ResetPendingMedallas).Methods("GET")
+
+	//Ruta proxy
 
 	return r
 }
