@@ -5,6 +5,7 @@ import (
 	"backend_proyecto_verde/internal/repository/postgres"
 	"backend_proyecto_verde/internal/utils"
 	"bytes"
+	"context"
 	"database/sql"
 	"fmt"
 	"io"
@@ -13,23 +14,23 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/aws/aws-sdk-go/aws"
-	"github.com/aws/aws-sdk-go/aws/session"
-	"github.com/aws/aws-sdk-go/service/s3"
+	"git.sr.ht/~jamesponddotco/bunnystorage-go"
 	"github.com/gorilla/mux"
 )
 
 type UserActionsHandler struct {
 	repo         *postgres.UserActionsRepository
 	medallasRepo *postgres.MedallasRepository
-	awsSession   *session.Session
+	bunnyClient  *bunnystorage.Client
+	storageZone  string
 }
 
-func NewUserActionsHandler(repo *postgres.UserActionsRepository, medallasRepo *postgres.MedallasRepository, awsSession *session.Session) *UserActionsHandler {
+func NewUserActionsHandler(repo *postgres.UserActionsRepository, medallasRepo *postgres.MedallasRepository, bunnyClient *bunnystorage.Client, storageZone string) *UserActionsHandler {
 	return &UserActionsHandler{
 		repo:         repo,
 		medallasRepo: medallasRepo,
-		awsSession:   awsSession,
+		bunnyClient:  bunnyClient,
+		storageZone:  storageZone,
 	}
 }
 
@@ -51,7 +52,7 @@ func (h *UserActionsHandler) CreateAction(w http.ResponseWriter, r *http.Request
 	}
 
 	// Subir la imagen usando el repositorio
-	imageURL, err := h.UploadImageToLightsail(file)
+	imageURL, err := h.UploadImageToBunnyStorage(file)
 	if err != nil {
 		utils.RespondWithInternalServerError(w, err.Error(), "Error al subir la imagen")
 		return
@@ -184,9 +185,9 @@ func (h *UserActionsHandler) checkMedallas(userID string) {
 	}()
 }
 
-// UploadImageToLightsail sube una imagen a un bucket de AWS usando el SDK de S3
+// UploadImageToBunnyStorage sube una imagen a BunnyStorage usando el SDK de bunnystorage-go
 // y devuelve la URL de la imagen subida
-func (h *UserActionsHandler) UploadImageToLightsail(file multipart.File) (string, error) {
+func (h *UserActionsHandler) UploadImageToBunnyStorage(file multipart.File) (string, error) {
 	if file == nil {
 		return "", fmt.Errorf("archivo no proporcionado")
 	}
@@ -197,30 +198,21 @@ func (h *UserActionsHandler) UploadImageToLightsail(file multipart.File) (string
 		return "", fmt.Errorf("error al leer el archivo: %v", err)
 	}
 
-	// Crear cliente de S3 usando la sesión configurada en el main
-	s3Client := s3.New(h.awsSession)
+	// Generar la ruta del archivo
+	fileName := fmt.Sprintf("images/%s.jpg", time.Now().Format("20060102150405"))
 
-	// Nombre del bucket y clave del objeto
-	bucketName := "bucket-e886au" // Reemplaza con el nombre de tu bucket
-	objectKey := fmt.Sprintf("images/%s.jpg", time.Now().Format("20060102150405"))
+	// Crear el contexto para la operación
+	ctx := context.Background()
 
-	// Preparar la solicitud para subir el objeto
-	input := &s3.PutObjectInput{
-		Bucket:      aws.String(bucketName),
-		Key:         aws.String(objectKey),
-		Body:        bytes.NewReader(fileBytes),
-		ContentType: aws.String("image/jpeg"), // Ajusta según el tipo de archivo
-	}
-
-	// Subir el objeto al bucket
-	_, err = s3Client.PutObject(input)
+	// Subir el archivo a BunnyStorage
+	// Los parámetros son: context, path en el storage, nombre del archivo, tipo de contenido, y los datos
+	_, err = h.bunnyClient.Upload(ctx, "/", fileName, "image/jpeg", bytes.NewReader(fileBytes))
 	if err != nil {
-		return "", fmt.Errorf("error al subir la imagen a S3: %v", err)
+		return "", fmt.Errorf("error al subir la imagen a BunnyStorage: %v", err)
 	}
 
 	// Construir la URL del objeto
-	region := *h.awsSession.Config.Region
-	imageURL := fmt.Sprintf("https://%s.s3.%s.amazonaws.com/%s", bucketName, region, objectKey)
+	imageURL := fmt.Sprintf("https://%s.b-cdn.net/%s", h.storageZone, fileName)
 
 	return imageURL, nil
 }

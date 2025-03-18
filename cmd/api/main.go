@@ -35,11 +35,10 @@ func main() {
 		log.Fatalf("Error al conectar a la base de datos: %v", err)
 	}
 	defer db.Close()
-
-	// Inicializar la sesión de AWS
-	awsSession, err := config.InitAWSSession()
+	// Inicializar el cliente de BunnyStorage
+	bunnyClient, storageZone, err := config.InitBunnyStorageClient()
 	if err != nil {
-		log.Fatalf("Error al inicializar la sesión de AWS: %v", err)
+		log.Fatalf("Error al inicializar el cliente de BunnyStorage: %v", err)
 	}
 
 	// Inicializar repositorios
@@ -52,7 +51,7 @@ func main() {
 	// Inicializar handlers
 	userHandler := handlers.NewUserHandler(userRepo)
 	torneoHandler := handlers.NewTorneoHandler(torneoRepo)
-	userActionsHandler := handlers.NewUserActionsHandler(userActionsRepo, medallasRepo, awsSession)
+	userActionsHandler := handlers.NewUserActionsHandler(userActionsRepo, medallasRepo, bunnyClient, storageZone)
 	userFriendsHandler := handlers.NewUserFriendsHandler(userFriendsRepo)
 	medallasHandler := handlers.NewMedallasHandler(medallasRepo)
 
