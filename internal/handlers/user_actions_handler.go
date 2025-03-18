@@ -198,21 +198,37 @@ func (h *UserActionsHandler) UploadImageToBunnyStorage(file multipart.File) (str
 		return "", fmt.Errorf("error al leer el archivo: %v", err)
 	}
 
+	// Verificar que el archivo tenga contenido
+	if len(fileBytes) == 0 {
+		return "", fmt.Errorf("el archivo está vacío")
+	}
+
+	// Imprimir información para depuración
+	fmt.Printf("Tamaño del archivo a subir: %d bytes\n", len(fileBytes))
+	fmt.Printf("Cliente BunnyStorage inicializado: %v\n", h.bunnyClient != nil)
+	fmt.Printf("Zona de almacenamiento: %s\n", h.storageZone)
+
 	// Generar la ruta del archivo
-	fileName := fmt.Sprintf("images/%s.jpg", time.Now().Format("20060102150405"))
+	fileName := fmt.Sprintf("%s.jpg", time.Now().Format("20060102150405"))
+	fmt.Printf("Nombre del archivo a subir: %s\n", fileName)
 
 	// Crear el contexto para la operación
 	ctx := context.Background()
 
-	// Subir el archivo a BunnyStorage
-	// Los parámetros son: context, path en el storage, nombre del archivo, tipo de contenido, y los datos
-	_, err = h.bunnyClient.Upload(ctx, "/", fileName, "image/jpeg", bytes.NewReader(fileBytes))
+	// Subir el archivo a BunnyStorage con manejo de errores detallado
+	fmt.Println("Iniciando carga a BunnyStorage...")
+	upload, err := h.bunnyClient.Upload(ctx, "/images", fileName, "", bytes.NewReader(fileBytes))
 	if err != nil {
+		fmt.Printf("Error al subir la imagen a BunnyStorage: %v\n", err)
 		return "", fmt.Errorf("error al subir la imagen a BunnyStorage: %v", err)
 	}
 
+	// Imprimir información del resultado
+	fmt.Printf("Archivo subido con éxito. Detalles: %+v\n", upload)
+
 	// Construir la URL del objeto
-	imageURL := fmt.Sprintf("https://%s.b-cdn.net/%s", h.storageZone, fileName)
+	imageURL := fmt.Sprintf("https://%s.b-cdn.net/images/%s", h.storageZone, fileName)
+	fmt.Printf("URL generada: %s\n", imageURL)
 
 	return imageURL, nil
 }

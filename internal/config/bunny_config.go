@@ -14,6 +14,13 @@ func InitBunnyStorageClient() (*bunnystorage.Client, string, error) {
 	readOnlyKey := os.Getenv("BUNNYNET_READ_API_KEY")
 	readWriteKey := os.Getenv("BUNNYNET_WRITE_API_KEY")
 	storageZone := os.Getenv("BUNNYNET_STORAGE_ZONE")
+	pullZone := os.Getenv("BUNNYNET_PULL_ZONE")
+
+	// Imprimir información de depuración
+	fmt.Println("==== Configuración de BunnyStorage ====")
+	fmt.Printf("Storage Zone: %s\n", storageZone)
+	fmt.Printf("Read Key disponible: %v\n", readOnlyKey != "")
+	fmt.Printf("Write Key disponible: %v\n", readWriteKey != "")
 
 	// Verificar que las credenciales estén disponibles
 	if readOnlyKey == "" || readWriteKey == "" || storageZone == "" {
@@ -21,6 +28,7 @@ func InitBunnyStorageClient() (*bunnystorage.Client, string, error) {
 	}
 
 	endpoint := "falkenstein" // Endpoint por defecto
+	fmt.Printf("Endpoint seleccionado: %s\n", endpoint)
 
 	// Determinar el endpoint correcto según el valor configurado
 	var bunnyEndpoint bunnystorage.Endpoint
@@ -44,10 +52,12 @@ func InitBunnyStorageClient() (*bunnystorage.Client, string, error) {
 	}
 
 	// Crear el cliente con la configuración
+	fmt.Println("Creando cliente BunnyStorage...")
 	client, err := bunnystorage.NewClient(cfg)
 	if err != nil {
 		return nil, "", fmt.Errorf("error al crear el cliente de BunnyStorage: %v", err)
 	}
+	fmt.Println("Cliente BunnyStorage creado exitosamente")
 
-	return client, storageZone, nil
+	return client, pullZone, nil
 }
