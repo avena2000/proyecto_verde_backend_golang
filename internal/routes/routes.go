@@ -63,7 +63,7 @@ func SetupRoutes(
 	r.HandleFunc("/api/users/{user_id}/actions", userActionsHandler.CreateAction).Methods("POST")
 	r.HandleFunc("/api/users/{user_id}/actions", userActionsHandler.GetUserActions).Methods("GET")
 	r.HandleFunc("/api/actions/{id}", userActionsHandler.DeleteAction).Methods("DELETE")
-	r.HandleFunc("/v1/api/actions", userActionsHandler.GetAllActions).Methods("GET")
+	r.HandleFunc("/api/actions", userActionsHandler.GetAllActions).Methods("GET")
 
 	// Rutas de amigos
 	r.HandleFunc("/api/users/{user_id}/friends", userFriendsHandler.GetFriendsList).Methods("GET")
