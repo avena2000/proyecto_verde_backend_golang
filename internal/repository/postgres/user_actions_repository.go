@@ -95,6 +95,51 @@ func (r *UserActionsRepository) CreateAction(action *models.UserAction) error {
 	})
 }
 
+func (r *UserActionsRepository) GetTorneoID(userID string) (string, error) {
+	var torneoID string
+	query := `
+		SELECT torneo_id
+		FROM user_stats
+		WHERE user_id = $1`
+
+	err := r.db.QueryRow(query, userID).Scan(&torneoID)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			return "", fmt.Errorf("el usuario no tiene torneo asociado")
+		}
+		return "", fmt.Errorf("error al obtener el torneo del usuario: %w", err)
+	}
+
+	return torneoID, nil
+}
+
+func (r *UserActionsRepository) TorneoPoints(userID string, actionType string, torneoID string) (int, error) {
+	var puntos int
+	switch actionType {
+	case "ayuda":
+		puntos = 50
+	case "alerta":
+		puntos = 40
+	case "descubrimiento":
+		puntos = 25
+	default:
+		puntos = 5
+	}
+
+	// Actualizar puntos del torneo si es necesario
+	updateTorneoQuery := `
+		UPDATE torneo_estadisticas
+		SET puntos = puntos + $1
+		WHERE id_jugador = $2 AND id_torneo = $3`
+
+	_, err := r.db.Exec(updateTorneoQuery, puntos, userID, torneoID)
+	if err != nil {
+		return 0, fmt.Errorf("error al actualizar puntos del torneo: %w", err)
+	}
+
+	return puntos, nil
+}
+
 func (r *UserActionsRepository) UploadImage(file multipart.File) (string, error) {
 	if file == nil {
 		return "", nil
@@ -240,8 +285,8 @@ func (r *UserActionsRepository) SoftDeleteAction(id string) error {
 
 func (r *UserActionsRepository) GetActionByID(id string) (*models.UserAction, error) {
 	var action models.UserAction
-	query := `SELECT id, user_id, tipo_accion FROM user_actions WHERE id = $1 AND deleted_at IS NULL`
-	err := r.db.QueryRow(query, id).Scan(&action.ID, &action.UserID, &action.TipoAccion)
+	query := `SELECT id, user_id, tipo_accion, foto FROM user_actions WHERE id = $1 AND deleted_at IS NULL`
+	err := r.db.QueryRow(query, id).Scan(&action.ID, &action.UserID, &action.TipoAccion, &action.Foto)
 	if err != nil {
 		return nil, err
 	}

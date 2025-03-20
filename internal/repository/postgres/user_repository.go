@@ -379,7 +379,7 @@ func (r *UserRepository) EditUserProfile(profile *models.EditProfile) error {
 func (r *UserRepository) GetUserStats(userID string) (*models.UserStats, error) {
 	query := `
 		SELECT id, user_id, puntos, acciones,torneos_participados, cantidad_amigos,
-			es_dueno_torneo, torneos_ganados, pending_medalla, pending_amigo
+			es_dueno_torneo, torneos_ganados, pending_medalla, pending_amigo, torneo_id
 		FROM user_stats
 		WHERE user_id = $1`
 
@@ -388,7 +388,7 @@ func (r *UserRepository) GetUserStats(userID string) (*models.UserStats, error) 
 		&stats.ID, &stats.UserID, &stats.Puntos,
 		&stats.Acciones, &stats.TorneosParticipados, &stats.CantidadAmigos,
 		&stats.EsDuenoTorneo, &stats.TorneosGanados, &stats.PendingMedalla,
-		&stats.PendingAmigo,
+		&stats.PendingAmigo, &stats.TorneoId,
 	)
 
 	if err != nil {
@@ -503,6 +503,80 @@ func (r *UserRepository) GetRanking() ([]models.UserRanking, error) {
 		ORDER BY us.puntos DESC;
 `
 	rows, err := r.db.Query(query)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var ranking []models.UserRanking
+	for rows.Next() {
+		var r models.UserRanking
+		err := rows.Scan(
+			&r.UserID,
+			&r.Puntos,
+			&r.Acciones,
+			&r.TorneosGanados,
+			&r.CantidadAmigos,
+			&r.Slogan,
+			&r.Cabello,
+			&r.Vestimenta,
+			&r.Barba,
+			&r.DetalleFacial,
+			&r.DetalleAdicional,
+			&r.Nombre,
+			&r.Apellido,
+		)
+		if err != nil {
+			return nil, err
+		}
+		ranking = append(ranking, r)
+	}
+
+	return ranking, nil
+}
+
+// GetRankingTorneo obtiene el ranking de usuarios para un torneo específico
+// ordenado por los puntos obtenidos en ese torneo
+func (r *UserRepository) GetRankingTorneo(torneoID string) ([]models.UserRanking, error) {
+	query := `
+		SELECT
+			te.id_jugador AS user_id,
+			te.puntos,
+			us.acciones,
+			us.torneos_ganados,
+			us.cantidad_amigos,
+			up.slogan,
+			up.cabello,
+			up.vestimenta,
+			up.barba,
+			up.detalle_facial,
+			up.detalle_adicional,
+			ub.nombre,
+			ub.apellido
+		FROM torneo_estadisticas te
+		JOIN user_stats us ON te.id_jugador = us.user_id
+		LEFT JOIN user_profile up ON te.id_jugador = up.user_id
+		LEFT JOIN user_basic_info ub ON te.id_jugador = ub.user_id
+		WHERE te.id_torneo = $1
+		AND ub.nombre IS NOT NULL
+		AND ub.nombre <> ''
+		AND ub.apellido IS NOT NULL
+		AND ub.apellido <> ''
+		AND up.slogan IS NOT NULL
+		AND up.slogan <> ''
+		AND up.cabello IS NOT NULL
+		AND up.cabello <> ''
+		AND up.vestimenta IS NOT NULL
+		AND up.vestimenta <> ''
+		AND up.barba IS NOT NULL
+		AND up.barba <> ''
+		AND up.detalle_facial IS NOT NULL
+		AND up.detalle_facial <> ''
+		AND up.detalle_adicional IS NOT NULL
+		AND up.detalle_adicional <> ''
+		ORDER BY te.puntos DESC;
+	`
+	rows, err := r.db.Query(query, torneoID)
 	if err != nil {
 		return nil, err
 	}

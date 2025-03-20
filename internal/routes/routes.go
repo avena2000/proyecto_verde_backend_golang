@@ -46,18 +46,25 @@ func SetupRoutes(
 	r.HandleFunc("/api/users/{id}/profile/edit", userHandler.UpdateUserProfileEdit).Methods("PUT")
 	r.HandleFunc("/api/users/{id}/stats", userHandler.GetUserStats).Methods("GET")
 	r.HandleFunc("/api/users/{id}/stats", userHandler.UpdateUserStats).Methods("PUT")
+
+	// Rutas de ranking
 	r.HandleFunc("/api/ranking", userHandler.GetRanking).Methods("GET")
+	r.HandleFunc("/api/ranking/torneo/{torneo_id}", userHandler.GetRankingTorneo).Methods("GET")
 
 	// Rutas de torneos
 	r.HandleFunc("/api/torneos", torneoHandler.CreateTorneo).Methods("POST")
 	r.HandleFunc("/api/torneos", torneoHandler.ListTorneos).Methods("GET")
 	r.HandleFunc("/api/torneos/{id}", torneoHandler.GetTorneo).Methods("GET")
+	r.HandleFunc("/api/torneos/code/{code_id}", torneoHandler.GetTorneoByCodeID).Methods("GET")
 	r.HandleFunc("/api/torneos/admin/{id}", torneoHandler.GetTorneoAdmin).Methods("GET")
 	r.HandleFunc("/api/torneos/admin/{id}/terminar", torneoHandler.TerminarTorneo).Methods("POST")
 	r.HandleFunc("/api/torneos/admin/{id}/borrar", torneoHandler.BorrarTorneo).Methods("POST")
 	r.HandleFunc("/api/torneos/inscribir/{code_id}", torneoHandler.InscribirUsuario).Methods("POST")
+	r.HandleFunc("/api/torneos/{torneo_id}/usuario/{user_id}", torneoHandler.SalirTorneo).Methods("DELETE")
 	r.HandleFunc("/api/torneos/{id}", torneoHandler.UpdateTorneo).Methods("PUT")
 	r.HandleFunc("/api/torneos/{id}/estadisticas", torneoHandler.GetTorneoStats).Methods("GET")
+	r.HandleFunc("/api/users/{user_id}/torneos", torneoHandler.GetTorneosUsuario).Methods("GET")
+	r.HandleFunc("/api/torneos/{torneo_id}/usuario/{user_id}/equipo", torneoHandler.GetEquipoUsuarioTorneo).Methods("GET")
 
 	// Rutas de acciones de usuario
 	r.HandleFunc("/api/users/{user_id}/actions", userActionsHandler.CreateAction).Methods("POST")

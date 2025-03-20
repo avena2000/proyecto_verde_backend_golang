@@ -31,4 +31,10 @@ type TorneoEstadisticas struct {
 	Modalidad  string `json:"modalidad"`
 	Puntos     int    `json:"puntos"`
 	Habilitado bool   `json:"habilitado"`
-} 
+}
+
+// TorneoResumen representa un resumen de un torneo para listar en la interfaz de usuario
+type TorneoResumen struct {
+	ID        string `json:"id"`
+	Nombre    string `json:"nombre"`
+}

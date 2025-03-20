@@ -23,13 +23,13 @@ CREATE TABLE torneos (
   fecha_inicio TIMESTAMP NOT NULL,
   fecha_fin TIMESTAMP NOT NULL,
   ubicacion_aproximada BOOLEAN NOT NULL DEFAULT FALSE,
-  kilometros_aproximados INT,
+  metros_aproximados INT,
   finalizado BOOLEAN NOT NULL DEFAULT FALSE,
   code_id TEXT NOT NULL UNIQUE,
   ganador_versus BOOLEAN,
   ganador_individual UUID,
   CONSTRAINT pk_torneos PRIMARY KEY (id),
-  CONSTRAINT fk_user_creator_user FOREIGN KEY (id_creator) REFERENCES user_access(id) ON DELETE CASCADE
+  CONSTRAINT fk_user_creator_user FOREIGN KEY (id_creator) REFERENCES user_access(id)
 );
 
 -- Estadísticas de usuario (necesita user_access y torneos)
@@ -47,7 +47,7 @@ CREATE TABLE user_stats (
   torneo_id UUID,
   CONSTRAINT pk_user_stats PRIMARY KEY (id),
   CONSTRAINT fk_user_stats_user FOREIGN KEY (user_id) REFERENCES user_access(id) ON DELETE CASCADE,
-  CONSTRAINT fk_user_stats_torneo FOREIGN KEY (torneo_id) REFERENCES torneos(id) ON DELETE CASCADE
+  CONSTRAINT fk_user_stats_torneo FOREIGN KEY (torneo_id) REFERENCES torneos(id) ON DELETE SET NULL
 );
 
 -- Información de personalización de personaje (necesita user_access)

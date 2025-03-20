@@ -12,6 +12,7 @@ import (
 	"mime/multipart"
 	"net/http"
 	"strconv"
+	"strings"
 	"time"
 
 	"git.sr.ht/~jamesponddotco/bunnystorage-go"
@@ -61,6 +62,7 @@ func (h *UserActionsHandler) CreateAction(w http.ResponseWriter, r *http.Request
 	tipoAccion := r.FormValue("tipo_accion")
 	latitud := r.FormValue("latitud")
 	longitud := r.FormValue("longitud")
+	isTournamentValid := r.FormValue("is_tournament_valid") == "true"
 
 	// Validar los valores recibidos
 	if tipoAccion == "" || latitud == "" || longitud == "" {
@@ -104,6 +106,20 @@ func (h *UserActionsHandler) CreateAction(w http.ResponseWriter, r *http.Request
 		utils.RespondWithDatabaseError(w, "Error al crear la acción", err.Error())
 		return
 	}
+
+	if isTournamentValid {
+		torneoID, err := h.repo.GetTorneoID(userID)
+		if err != nil {
+			utils.RespondWithDatabaseError(w, "Error al obtener el ID del torneo", err.Error())
+			return
+		}
+		_, err = h.repo.TorneoPoints(userID, action.TipoAccion, torneoID)
+		if err != nil {
+			utils.RespondWithDatabaseError(w, "Error al actualizar los puntos del torneo", err.Error())
+			return
+		}
+	}
+
 	// Verificar si el usuario ha ganado medallas
 	h.checkMedallas(userID)
 
@@ -136,6 +152,29 @@ func (h *UserActionsHandler) DeleteAction(w http.ResponseWriter, r *http.Request
 			utils.RespondWithDatabaseError(w, "Error al obtener la acción", err.Error())
 		}
 		return
+	}
+
+	// Eliminar la imagen del CDN si existe
+	if action.Foto != "" {
+		// Extraer el nombre del archivo de la URL
+		// La URL tiene formato: https://storage-zone/images/filename.jpg
+		parts := strings.Split(action.Foto, "/")
+		if len(parts) > 0 {
+			fileName := parts[len(parts)-1]
+			path := "/images/" + fileName
+
+			ctx := context.Background()
+			fmt.Printf("Intentando eliminar archivo: %s\n", path)
+
+			// Eliminar la imagen del CDN
+			_, err := h.bunnyClient.Delete(ctx, "/images", fileName)
+			if err != nil {
+				// Solo registramos el error pero seguimos con la eliminación de la acción
+				fmt.Printf("Error al eliminar la imagen del CDN: %v\n", err)
+			} else {
+				fmt.Printf("Imagen eliminada correctamente del CDN: %s\n", path)
+			}
+		}
 	}
 
 	// Eliminar la acción
@@ -227,7 +266,8 @@ func (h *UserActionsHandler) UploadImageToBunnyStorage(file multipart.File) (str
 	fmt.Printf("Archivo subido con éxito. Detalles: %+v\n", upload)
 
 	// Construir la URL del objeto
-	imageURL := fmt.Sprintf("https://%s.b-cdn.net/images/%s", h.storageZone, fileName)
+	//imageURL := fmt.Sprintf("https://%s.b-cdn.net/images/%s", h.storageZone, fileName)
+	imageURL := fmt.Sprintf("https://%s/images/%s", h.storageZone, fileName)
 	fmt.Printf("URL generada: %s\n", imageURL)
 
 	return imageURL, nil

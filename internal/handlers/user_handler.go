@@ -263,3 +263,18 @@ func (h *UserHandler) GetRanking(w http.ResponseWriter, r *http.Request) {
 
 	utils.RespondWithSuccess(w, ranking, "Ranking obtenido correctamente")
 }
+
+// GetRankingTorneo obtiene el ranking de usuarios para un torneo específico
+// según los puntos obtenidos en ese torneo
+func (h *UserHandler) GetRankingTorneo(w http.ResponseWriter, r *http.Request) {
+	vars := mux.Vars(r)
+	torneoID := vars["torneo_id"]
+
+	ranking, err := h.repo.GetRankingTorneo(torneoID)
+	if err != nil {
+		utils.RespondWithDatabaseError(w, "Error al obtener el ranking del torneo", err.Error())
+		return
+	}
+
+	utils.RespondWithSuccess(w, ranking, "Ranking del torneo obtenido correctamente")
+}
