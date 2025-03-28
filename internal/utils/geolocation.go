@@ -38,9 +38,12 @@ func ReverseGeocodeWithCity(lat, lon string) (string, string, error) {
 	defer resp.Body.Close()
 
 	var location struct {
-		Name string `json:"name"`
+		Name    string `json:"name"`
 		Address struct {
-			City  string `json:"city"`
+			City          string `json:"city"`
+			State         string `json:"state"`
+			Road          string `json:"road"`
+			Neighbourhood string `json:"neighbourhood"`
 		} `json:"address"`
 	}
 
@@ -49,8 +52,23 @@ func ReverseGeocodeWithCity(lat, lon string) (string, string, error) {
 	}
 
 	city := location.Address.City
+	if city == "" {
+		city = location.Address.State
+	}
 
-	return location.Name, city, nil
+	name := location.Name
+	if name == "" {
+		switch {
+		case location.Address.Road != "":
+			name = location.Address.Road
+		case location.Address.Neighbourhood != "":
+			name = location.Address.Neighbourhood
+		default:
+			name = "Desconocido"
+		}
+	}
+	
+	return name, city, nil
 }
 
 func TestReverseGeocode(t *testing.T) {

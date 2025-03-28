@@ -6,8 +6,10 @@ import (
 	"backend_proyecto_verde/internal/utils"
 	"database/sql"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"strconv"
+	"strings"
 
 	"github.com/gorilla/mux"
 )
@@ -228,4 +230,59 @@ func (h *TorneoHandler) GetEquipoUsuarioTorneo(w http.ResponseWriter, r *http.Re
 	}
 
 	utils.RespondWithSuccess(w, response, "Equipo del usuario obtenido correctamente")
+}
+
+// FinalizeTournaments finaliza automáticamente todos los torneos cuya fecha de fin ya ha pasado
+func (h *TorneoHandler) FinalizeTournaments() error {
+	// Buscar todos los torneos vencidos
+	creatorIDs, err := h.repo.FindExpiredTournaments()
+	if err != nil {
+		return fmt.Errorf("error al buscar torneos vencidos: %w", err)
+	}
+
+	// Si no hay torneos vencidos, retornar sin errores
+	if len(creatorIDs) == 0 {
+		return nil
+	}
+
+	// Finalizar cada torneo vencido
+	var finalErrors []string
+	for _, creatorID := range creatorIDs {
+		if err := h.repo.TerminarTorneo(creatorID); err != nil {
+			finalErrors = append(finalErrors, fmt.Sprintf("Error al finalizar torneo del creador %s: %v", creatorID, err))
+		}
+	}
+
+	// Si hubo errores, reportarlos todos juntos
+	if len(finalErrors) > 0 {
+		return fmt.Errorf("errores al finalizar torneos: %s", strings.Join(finalErrors, "; "))
+	}
+
+	return nil
+}
+
+// UpdateTorneoFechaFin actualiza solo la fecha de fin de un torneo
+func (h *TorneoHandler) UpdateTorneoFechaFin(w http.ResponseWriter, r *http.Request) {
+	vars := mux.Vars(r)
+	id := vars["id"]
+
+	var body struct {
+		FechaFin string `json:"fecha_fin"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		utils.RespondWithBadRequest(w, "Error al decodificar el cuerpo de la solicitud", err.Error())
+		return
+	}
+
+	if body.FechaFin == "" {
+		utils.RespondWithBadRequest(w, "La fecha de fin no puede estar vacía", "fecha_fin es requerida")
+		return
+	}
+
+	if err := h.repo.UpdateTorneoFechaFin(id, body.FechaFin); err != nil {
+		utils.RespondWithDatabaseError(w, "Error al actualizar la fecha de fin del torneo", err.Error())
+		return
+	}
+
+	utils.RespondWithSuccess(w, map[string]string{"id": id, "fecha_fin": body.FechaFin}, "Fecha de fin del torneo actualizada correctamente")
 }

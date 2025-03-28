@@ -767,3 +767,47 @@ func (r *TorneoRepository) GetEquipoUsuarioTorneo(torneoID string, userID string
 
 	return &equipo, nil
 }
+
+// FindExpiredTournaments busca los torneos cuya fecha de fin ya ha pasado pero no están marcados como finalizados
+func (r *TorneoRepository) FindExpiredTournaments() ([]string, error) {
+	query := `
+		SELECT id_creator
+		FROM torneos
+		WHERE fecha_fin < NOW() AND finalizado = false`
+
+	rows, err := r.db.Query(query)
+	if err != nil {
+		return nil, fmt.Errorf("error al buscar torneos vencidos: %w", err)
+	}
+	defer rows.Close()
+
+	var creatorIDs []string
+	for rows.Next() {
+		var creatorID string
+		if err := rows.Scan(&creatorID); err != nil {
+			return nil, fmt.Errorf("error al leer ID del creador: %w", err)
+		}
+		creatorIDs = append(creatorIDs, creatorID)
+	}
+
+	if err = rows.Err(); err != nil {
+		return nil, fmt.Errorf("error al procesar resultados: %w", err)
+	}
+
+	return creatorIDs, nil
+}
+
+// UpdateTorneoFechaFin actualiza solo la fecha de fin de un torneo específico
+func (r *TorneoRepository) UpdateTorneoFechaFin(id string, fechaFin string) error {
+	query := `
+		UPDATE torneos
+		SET fecha_fin = $1
+		WHERE id = $2`
+
+	_, err := r.db.Exec(query, fechaFin, id)
+	if err != nil {
+		return fmt.Errorf("error al actualizar fecha de fin del torneo: %w", err)
+	}
+
+	return nil
+}

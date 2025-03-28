@@ -62,6 +62,7 @@ func SetupRoutes(
 	r.HandleFunc("/api/torneos/inscribir/{code_id}", torneoHandler.InscribirUsuario).Methods("POST")
 	r.HandleFunc("/api/torneos/{torneo_id}/usuario/{user_id}", torneoHandler.SalirTorneo).Methods("DELETE")
 	r.HandleFunc("/api/torneos/{id}", torneoHandler.UpdateTorneo).Methods("PUT")
+	r.HandleFunc("/api/torneos/{id}/fecha_fin", torneoHandler.UpdateTorneoFechaFin).Methods("PUT")
 	r.HandleFunc("/api/torneos/{id}/estadisticas", torneoHandler.GetTorneoStats).Methods("GET")
 	r.HandleFunc("/api/users/{user_id}/torneos", torneoHandler.GetTorneosUsuario).Methods("GET")
 	r.HandleFunc("/api/torneos/{torneo_id}/usuario/{user_id}/equipo", torneoHandler.GetEquipoUsuarioTorneo).Methods("GET")

@@ -11,6 +11,7 @@ import (
 	"os"
 
 	"github.com/joho/godotenv"
+	"github.com/robfig/cron/v3"
 	"github.com/rs/cors"
 )
 
@@ -55,6 +56,9 @@ func main() {
 	userFriendsHandler := handlers.NewUserFriendsHandler(userFriendsRepo)
 	medallasHandler := handlers.NewMedallasHandler(medallasRepo)
 
+	// Inicializar cron jobs
+	initCronJobs(torneoHandler)
+
 	// Configurar rutas
 	router := routes.SetupRoutes(
 		userHandler,
@@ -80,6 +84,31 @@ func main() {
 	if err := http.ListenAndServe("0.0.0.0:"+port, corsHandler); err != nil {
 		log.Fatalf("Error al iniciar el servidor: %v", err)
 	}
+}
+
+// initCronJobs configura y arranca todos los trabajos programados
+func initCronJobs(torneoHandler *handlers.TorneoHandler) {
+	// Crear una nueva instancia del programador cron
+	c := cron.New(cron.WithSeconds())
+
+	// Añadir trabajo para finalizar torneos vencidos (cada minuto)
+	// El formato es: segundo minuto hora díaDelMes mes díaDeLaSemana
+	_, err := c.AddFunc("0 * * * * *", func() {
+		log.Println("Ejecutando verificación de torneos vencidos...")
+		if err := torneoHandler.FinalizeTournaments(); err != nil {
+			log.Printf("Error al finalizar torneos vencidos: %v", err)
+		} else {
+			log.Println("Verificación de torneos vencidos completada")
+		}
+	})
+	if err != nil {
+		log.Printf("Error al programar trabajo de finalización de torneos: %v", err)
+	}
+
+	// Iniciar el programador en una goroutine
+	c.Start()
+
+	log.Println("Cron jobs inicializados correctamente")
 }
 
 func getEnv(key, defaultValue string) string {
