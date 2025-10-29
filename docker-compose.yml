@@ -10,6 +10,10 @@ services:
       - DB_USER=postgres
       - DB_PASSWORD=postgres
       - DB_NAME=proyecto_verde
+      - BUNNYNET_READ_API_KEY=b713e35f-eac1-467a-8e9fc315503e-c1ec-4929
+      - BUNNYNET_WRITE_API_KEY=b713e35f-eac1-467a-8e9fc315503e-c1ec-4929
+      - BUNNYNET_STORAGE_ZONE=vive
+      - BUNNYNET_PULL_ZONE=cdn.integra-expansion.com
     depends_on:
       postgres:
         condition: service_healthy
