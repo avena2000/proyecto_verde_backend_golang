@@ -1,42 +1,7 @@
 services:
-  reverse-proxy:
-    image: traefik:v3.3.1
-    command:
-      - "--api.insecure=true"
-      - "--providers.docker"
-      - "--providers.docker.exposedbydefault=false"
-      - "--entrypoints.websecure.address=:443"
-      - "--entrypoints.web.address=:80"
-      - "--entrypoints.web.http.redirections.entrypoint.to=websecure"
-      - "--entrypoints.web.http.redirections.entrypoint.scheme=https"
-      - "--certificatesresolvers.myresolver.acme.email=avn2000inc@gmail.com"
-      - "--certificatesresolvers.myresolver.acme.storage=/letsencrypt/acme.json"
-      - "--certificatesresolvers.myresolver.acme.tlschallenge=true"
-      - "traefik.docker.network=traefik-network"
-    ports:
-      - "80:80"
-      - "443:443"
-      - "8080:8080"
-    volumes:
-      - letsencrypt:/letsencrypt
-      - /var/run/docker.sock:/var/run/docker.sock
-    networks:
-      - traefik-network
-      - app-network
   backend:
     build:
       context: .
-    labels:
-      - "traefik.enable=true"
-      - "traefik.http.routers.backend.entrypoints=websecure"
-      - "traefik.http.routers.backend.rule=Host(`vive.integra-expansion.com`) && PathPrefix(`/v1`)"
-      - "traefik.http.routers.backend.priority=10"
-      - "traefik.http.routers.backend.tls.certresolver=myresolver"
-      - "traefik.http.middlewares.strip-v1.stripprefix.prefixes=/v1"
-      - "traefik.http.routers.backend.middlewares=strip-v1"
-      - "traefik.http.services.backend.loadbalancer.server.port=9001"
-      - "traefik.http.routers.backend.service=backend"
-      - "traefik.docker.network=traefik-network"
     ports:
       - "9001:9001"
     environment:
@@ -51,7 +16,6 @@ services:
       postgres:
         condition: service_healthy
     networks:
-      - traefik-network
       - app-network
 
   frontend:
@@ -59,19 +23,9 @@ services:
     volumes:
       - ./frontend:/usr/share/nginx/html
       - ./nginx.conf:/etc/nginx/conf.d/default.conf
-    labels:
-      - "traefik.enable=true"
-      - "traefik.http.routers.frontend.entrypoints=websecure"
-      - "traefik.http.routers.frontend.rule=Host(`vive.integra-expansion.com`) && !PathPrefix(`/v1`)"
-      - "traefik.http.routers.frontend.priority=1"
-      - "traefik.http.routers.frontend.tls.certresolver=myresolver"
-      - "traefik.http.services.frontend.loadbalancer.server.port=80"
-      - "traefik.http.routers.frontend.service=frontend"
-      - "traefik.docker.network=traefik-network"
     ports:
       - "9000:80"
     networks:
-      - traefik-network
       - app-network
 
   postgres:
@@ -94,8 +48,6 @@ services:
 
 volumes:
   postgres-data:
-  letsencrypt:
 
 networks:
-  traefik-network:
   app-network:
