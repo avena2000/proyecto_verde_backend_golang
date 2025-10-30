@@ -6,10 +6,14 @@ import (
 	"backend_proyecto_verde/internal/repository/postgres"
 	"backend_proyecto_verde/internal/routes"
 	"backend_proyecto_verde/pkg/database"
+	"fmt"
 	"log"
 	"net/http"
 	"os"
 
+	"github.com/golang-migrate/migrate/v4"
+	_ "github.com/golang-migrate/migrate/v4/database/postgres"
+	_ "github.com/golang-migrate/migrate/v4/source/file"
 	"github.com/joho/godotenv"
 	"github.com/robfig/cron/v3"
 	"github.com/rs/cors"
@@ -36,6 +40,11 @@ func main() {
 		log.Fatalf("Error al conectar a la base de datos: %v", err)
 	}
 	defer db.Close()
+
+	// Ejecutar migraciones al inicio
+	if err := runMigrations(dbConfig); err != nil {
+		log.Fatalf("Error al ejecutar migraciones: %v", err)
+	}
 	// Inicializar el cliente de BunnyStorage
 	bunnyClient, storageZone, err := config.InitBunnyStorageClient()
 	if err != nil {
@@ -116,4 +125,30 @@ func getEnv(key, defaultValue string) string {
 		return value
 	}
 	return defaultValue
+}
+
+// runMigrations ejecuta las migraciones pendientes usando golang-migrate
+func runMigrations(cfg *database.Config) error {
+    dsn := fmt.Sprintf(
+        "postgres://%s:%s@%s:%s/%s?sslmode=disable",
+        cfg.User,
+        cfg.Password,
+        cfg.Host,
+        cfg.Port,
+        cfg.DBName,
+    )
+
+    m, err := migrate.New(
+        "file://db/migrations",
+        dsn,
+    )
+    if err != nil {
+        return err
+    }
+    defer m.Close()
+
+    if err := m.Up(); err != nil && err != migrate.ErrNoChange {
+        return err
+    }
+    return nil
 }

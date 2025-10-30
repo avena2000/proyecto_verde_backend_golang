@@ -1,6 +1,7 @@
 # Manual Técnico - Proyecto Verde
 
 ## Índice
+
 1. [Introducción](#introducción)
 2. [Arquitectura del Sistema](#arquitectura-del-sistema)
 3. [Componentes del Backend](#componentes-del-backend)
@@ -16,13 +17,17 @@
 13. [Solución de Problemas Comunes](#solución-de-problemas-comunes)
 
 ## Introducción
+
 Este manual técnico documenta la arquitectura, componentes y procedimientos para el mantenimiento y despliegue del Proyecto Verde. El documento está dirigido a desarrolladores y administradores de sistemas que necesitan comprender los aspectos técnicos de la aplicación.
 
 ## Arquitectura del Sistema
+
 ### Visión General
+
 El sistema está compuesto por un backend desarrollado en Go, una base de datos PostgreSQL, y se despliega utilizando Docker y Traefik como reverse proxy. La aplicación implementa una API RESTful para la comunicación con el frontend.
 
 ### Estructura de Directorios
+
 ```
 proyecto-verde/
 ├── cmd/
@@ -41,10 +46,13 @@ proyecto-verde/
 ```
 
 ## Componentes del Backend
+
 ### Estructura del Código
+
 El backend está desarrollado en Go y sigue una arquitectura modular. A continuación se detallan los principales componentes:
 
 #### Punto de Entrada (main.go)
+
 El archivo `cmd/api/main.go` inicializa la aplicación, conecta a la base de datos y configura los servicios necesarios. Sus principales funciones son:
 
 - Cargar variables de entorno desde el archivo `.env`
@@ -70,6 +78,7 @@ func main() {
 ```
 
 #### Sistema de Rutas
+
 Las rutas de la API están definidas en `internal/routes/routes.go` utilizando el router Gorilla Mux. El sistema de rutas organiza todos los endpoints de la aplicación en grupos lógicos:
 
 - Rutas de usuario: gestión de cuentas, perfil y estadísticas
@@ -82,6 +91,7 @@ Las rutas de la API están definidas en `internal/routes/routes.go` utilizando e
 Todas las rutas siguen el prefijo `/api/` para las peticiones directas al backend y pueden también ser accedidas mediante el prefijo `/v1/` cuando se utilizan a través del proxy.
 
 #### Controladores (Handlers)
+
 Los controladores manejan las solicitudes HTTP y se encuentran en `internal/handlers/`. Cada módulo funcional tiene su propio handler:
 
 - `UserHandler`: gestión de usuarios y perfiles
@@ -91,6 +101,7 @@ Los controladores manejan las solicitudes HTTP y se encuentran en `internal/hand
 - `MedallasHandler`: gestión del sistema de medallas y logros
 
 #### Repositorios
+
 La capa de acceso a datos está implementada en `internal/repository/postgres/`. Cada entidad principal tiene su propio repositorio:
 
 - `UserRepository`: operaciones CRUD para usuarios
@@ -100,9 +111,11 @@ La capa de acceso a datos está implementada en `internal/repository/postgres/`.
 - `MedallasRepository`: gestión de medallas y asignación a usuarios
 
 ### API RESTful
+
 La aplicación expone una API RESTful con los siguientes endpoints principales:
 
 #### Gestión de Usuarios
+
 - `POST /api/users`: Crear nuevo usuario
 - `POST /api/auth/login`: Autenticar usuario
 - `GET /api/auth/relogin/{id}`: Re-autenticar usuario por ID
@@ -114,10 +127,12 @@ La aplicación expone una API RESTful con los siguientes endpoints principales:
 - `GET/PUT /api/users/{id}/stats`: Gestionar estadísticas
 
 #### Ranking
+
 - `GET /api/ranking`: Obtener ranking general
 - `GET /api/ranking/torneo/{torneo_id}`: Obtener ranking de un torneo
 
 #### Torneos
+
 - `POST /api/torneos`: Crear torneo
 - `GET /api/torneos`: Listar torneos
 - `GET /api/torneos/{id}`: Obtener información de torneo
@@ -133,18 +148,21 @@ La aplicación expone una API RESTful con los siguientes endpoints principales:
 - `GET /api/torneos/{torneo_id}/usuario/{user_id}/equipo`: Obtener equipo de usuario en torneo
 
 #### Acciones de Usuario
+
 - `POST /api/users/{user_id}/actions`: Registrar acción
 - `GET /api/users/{user_id}/actions`: Obtener acciones de usuario
 - `DELETE /api/actions/{id}`: Eliminar acción
 - `GET /api/actions`: Obtener todas las acciones
 
 #### Sistema de Amigos
+
 - `GET /api/users/{user_id}/friends`: Listar amigos
 - `POST /api/users/{user_id}/friends/add`: Enviar solicitud de amistad
 - `PUT /api/users/{user_id}/friends/{friend_id}/accept`: Aceptar solicitud
 - `DELETE /api/users/{user_id}/friends/{friend_id}`: Eliminar amigo
 
 #### Sistema de Medallas
+
 - `POST /api/medallas`: Crear medalla
 - `GET /api/medallas`: Listar medallas
 - `GET /api/users/{user_id}/medallas`: Obtener medallas de usuario
@@ -153,10 +171,13 @@ La aplicación expone una API RESTful con los siguientes endpoints principales:
 - `GET /api/users/{user_id}/medallas/reset-pending`: Resetear medallas pendientes
 
 ## Frontend Flutter Web
+
 ### Descripción General
+
 El frontend de la aplicación está desarrollado con Flutter Web, lo que permite tener una aplicación web progresiva (PWA) con una experiencia de usuario fluida y moderna. Flutter Web utiliza tecnologías web estándar (HTML, CSS, JavaScript) pero aprovecha el framework de Flutter para ofrecer una experiencia de desarrollo unificada.
 
 ### Estructura del Proyecto Flutter
+
 La estructura típica del proyecto Flutter para el frontend incluye:
 
 ```
@@ -182,6 +203,7 @@ frontend/
 ```
 
 ### Proceso de Compilación
+
 El frontend se compila usando el siguiente comando específico para generar código optimizado con soporte para WebAssembly:
 
 ```bash
@@ -189,17 +211,20 @@ flutter build web --release --wasm
 ```
 
 Este comando:
+
 1. Compila el código Dart a WebAssembly (WASM) para mejor rendimiento
 2. Optimiza los recursos para producción
 3. Genera los archivos estáticos necesarios para desplegar la aplicación web
 
 Los archivos compilados se generan en el directorio `build/web/` y contienen todo lo necesario para desplegar la aplicación, incluyendo:
+
 - Archivos HTML, CSS y JavaScript
 - Assets compilados y optimizados
 - Código WASM para mejor rendimiento
 - Configuración de Service Worker para funcionalidades de PWA
 
 ### Integración con el Backend
+
 El frontend se comunica con el backend a través de la API RESTful usando:
 
 1. **HTTP Client**: Flutter utiliza un cliente HTTP para realizar peticiones a los endpoints del backend.
@@ -212,7 +237,7 @@ Ejemplo de comunicación típica:
 // Ejemplo simplificado de un servicio de API en Flutter
 class ApiService {
   final String baseUrl = 'https://vive.integra-expansion.com/v1/api';
-  
+
   Future<User> loginUser(String email, String password) async {
     final response = await http.post(
       Uri.parse('$baseUrl/auth/login'),
@@ -222,7 +247,7 @@ class ApiService {
       }),
       headers: {'Content-Type': 'application/json'},
     );
-    
+
     if (response.statusCode == 200) {
       return User.fromJson(jsonDecode(response.body));
     } else {
@@ -233,24 +258,31 @@ class ApiService {
 ```
 
 ### Despliegue del Frontend
+
 En el entorno de producción, los archivos compilados de Flutter Web se sirven a través del contenedor NGINX definido en el archivo `docker-compose.yml`. Este servidor web es responsable de entregar el contenido estático a los usuarios y está configurado para funcionar con Traefik como reverse proxy.
 
 ## Base de Datos
+
 Se utiliza PostgreSQL como sistema de gestión de base de datos relacional.
 
 ### Esquema
+
 El esquema de la base de datos está definido en el archivo `db/schema.sql` y se inicializa automáticamente durante el despliegue con Docker. El sistema utiliza UUID como identificadores primarios con la extensión `uuid-ossp` de PostgreSQL.
 
 ### Modelo de Datos
+
 El sistema utiliza un modelo relacional con las siguientes tablas principales:
 
 #### Usuarios y Perfiles
+
 - **user_access**: Almacena la información de autenticación de usuarios.
+
   - `id`: UUID único del usuario (PK, generado automáticamente)
   - `username`: Nombre de usuario (único)
   - `password`: Contraseña del usuario (debe almacenarse hasheada)
 
 - **user_profile**: Contiene información de personalización del avatar del usuario.
+
   - `id`: UUID único del perfil (PK)
   - `user_id`: Referencia al usuario (FK, único)
   - `slogan`: Frase o lema del usuario
@@ -261,6 +293,7 @@ El sistema utiliza un modelo relacional con las siguientes tablas principales:
   - `detalle_adicional`: Otros detalles de personalización
 
 - **user_basic_info**: Contiene información básica del usuario.
+
   - `id`: UUID único (PK)
   - `user_id`: Referencia al usuario (FK, único)
   - `numero`: Número telefónico (único)
@@ -282,7 +315,9 @@ El sistema utiliza un modelo relacional con las siguientes tablas principales:
   - `torneo_id`: Torneo actual (opcional, FK)
 
 #### Torneos
+
 - **torneos**: Información de los torneos.
+
   - `id`: UUID único del torneo (PK)
   - `id_creator`: Usuario creador (FK)
   - `nombre`: Nombre del torneo
@@ -312,6 +347,7 @@ El sistema utiliza un modelo relacional con las siguientes tablas principales:
   - `habilitado`: Estado de participación
 
 #### Acciones
+
 - **user_actions**: Registro de actividades de los usuarios.
   - `id`: UUID único de la acción (PK)
   - `user_id`: Referencia al usuario (FK)
@@ -329,6 +365,7 @@ El sistema utiliza un modelo relacional con las siguientes tablas principales:
   - `deleted_at`: Fecha y hora de eliminación (para borrado lógico)
 
 #### Amistades
+
 - **user_friends**: Sistema de amistad entre usuarios.
   - `id`: UUID único (PK)
   - `user_id`: Referencia al usuario solicitante (FK, parte de PK compuesta)
@@ -339,7 +376,9 @@ El sistema utiliza un modelo relacional con las siguientes tablas principales:
   - Restricción para evitar auto-amistades
 
 #### Medallas y Logros
+
 - **medallas**: Catálogo de medallas disponibles.
+
   - `id`: UUID único de la medalla (PK)
   - `nombre`: Nombre de la medalla
   - `descripcion`: Descripción de la medalla
@@ -359,6 +398,7 @@ El sistema utiliza un modelo relacional con las siguientes tablas principales:
   - `fecha_ganada`: Fecha y hora de obtención
 
 ### Relaciones Clave
+
 - Un usuario (`user_access`) tiene información básica (`user_basic_info`), perfil (`user_profile`) y estadísticas (`user_stats`)
 - Un usuario puede crear múltiples torneos (`torneos`)
 - Un usuario puede participar en múltiples torneos (`torneo_estadisticas`)
@@ -368,6 +408,7 @@ El sistema utiliza un modelo relacional con las siguientes tablas principales:
 - Las acciones pueden estar asociadas a torneos específicos (`user_actions` -> `torneos`)
 
 ### Índices y Optimización
+
 Para mejorar el rendimiento de las consultas más frecuentes, el sistema aprovecha:
 
 1. Claves primarias basadas en UUID que se generan automáticamente
@@ -377,23 +418,28 @@ Para mejorar el rendimiento de las consultas más frecuentes, el sistema aprovec
 5. Clave primaria compuesta en la tabla `user_friends` para optimizar consultas de amistad
 
 ### Datos Precargados
+
 El esquema incluye la inserción inicial de medallas con diferentes requisitos y niveles de dificultad:
 
 1. Medallas basadas en amistades:
+
    - "Vengadores, ¡unidos!" (10 amigos)
    - "Familia" (5 amigos)
    - "El poder de la amistad" (20 amigos)
 
 2. Medallas basadas en puntos:
+
    - "Making my way downtown" (100 puntos)
    - "This is Sparta!" (300 puntos)
    - "Soy inevitable" (1000 puntos)
 
 3. Medallas basadas en acciones:
+
    - "Orden 66" (66 acciones)
    - "O limpias, o te limpio." (500 acciones)
 
 4. Medallas basadas en torneos:
+
    - "Que comience el juego" (participar en 1 torneo)
    - "El elegido" (participar en 10 torneos)
 
@@ -402,23 +448,30 @@ El esquema incluye la inserción inicial de medallas con diferentes requisitos y
    - "Super Saiyajin" (ganar 5 torneos seguidos)
 
 ### Transacciones y Consistencia
+
 El sistema utiliza transacciones para operaciones críticas como:
+
 - Registro de acciones que otorgan puntos
 - Asignación de medallas
 - Inscripción en torneos
 
 ### Migración y Actualizaciones
+
 Para actualizar el esquema de la base de datos:
+
 1. Crear scripts de migración con cambios incrementales
 2. Probar en entorno de desarrollo
 3. Aplicar con tiempo de inactividad planificado
 4. Tener script de rollback preparado
 
 ## Configuración del Entorno
+
 ### Variables de Entorno
+
 La aplicación utiliza variables de entorno para la configuración. Estas variables se definen en archivos `.env` y son cargadas mediante la biblioteca `godotenv`. Las principales variables de configuración son:
 
 #### Configuración de Base de Datos
+
 - `DB_HOST`: Host de la base de datos (por defecto: "localhost")
 - `DB_PORT`: Puerto de la base de datos (por defecto: "5432")
 - `DB_USER`: Usuario de la base de datos (por defecto: "postgres")
@@ -426,24 +479,30 @@ La aplicación utiliza variables de entorno para la configuración. Estas variab
 - `DB_NAME`: Nombre de la base de datos (por defecto: "proyecto_verde")
 
 #### Configuración del Servidor
+
 - `PORT`: Puerto en el que se ejecutará el servidor (por defecto: "9001")
 - `CDN_URL`: URL de la CDN para servir archivos estáticos
 
 #### Configuración de BunnyStorage
+
 - `BUNNYNET_READ_API_KEY`: Clave de API de BunnyStorage para lectura
 - `BUNNYNET_WRITE_API_KEY`: Clave de API de BunnyStorage para escritura
 - `BUNNYNET_STORAGE_ZONE`: Zona de almacenamiento de BunnyStorage
 - `BUNNYNET_PULL_ZONE`: Zona de pull de BunnyStorage
 
 ### Archivos de Configuración
+
 Existen dos archivos de configuración `.env` en el proyecto:
+
 1. El archivo `.env` en la raíz del proyecto, utilizado para desarrollo local
 2. El archivo `cmd/api/.env` que contiene la configuración específica para el entorno de producción
 
 **Importante**: Para el despliegue en producción, es necesario asegurarse de que las claves de API de BunnyStorage estén correctamente configuradas y que la zona de almacenamiento esté disponible.
 
 ## Despliegue
+
 ### Docker
+
 La aplicación se despliega utilizando Docker y Docker Compose. El archivo `Dockerfile` define la imagen base para el backend:
 
 ```dockerfile
@@ -474,6 +533,7 @@ CMD ["./main"]
 ```
 
 ### Docker Compose
+
 El archivo `docker-compose.yml` define los servicios necesarios para ejecutar la aplicación:
 
 1. **reverse-proxy**: Servicio de Traefik para enrutar el tráfico y gestionar SSL
@@ -482,14 +542,17 @@ El archivo `docker-compose.yml` define los servicios necesarios para ejecutar la
 4. **postgres**: Servicio de base de datos PostgreSQL
 
 Para desplegar la aplicación en producción, ejecutar:
+
 ```bash
 docker-compose up -d
 ```
 
 ### Proceso de Compilación y Despliegue del Frontend
+
 Para compilar y desplegar el frontend en la aplicación, se deben seguir estos pasos:
 
 1. **Compilación del Frontend Flutter Web**:
+
    ```bash
    # Navegar al directorio del frontend
    cd frontend
@@ -517,11 +580,11 @@ Para compilar y desplegar el frontend en la aplicación, se deben seguir estos p
        listen 80;
        root /usr/share/nginx/html;
        index index.html;
-       
+
        location / {
            try_files $uri $uri/ /index.html;
        }
-       
+
        # Configuración de caché para recursos estáticos
        location ~* \.(js|css|png|jpg|jpeg|gif|ico|svg|wasm)$ {
            expires 1y;
@@ -547,6 +610,7 @@ Para compilar y desplegar el frontend en la aplicación, se deben seguir estos p
    ```
 
 ### Traefik
+
 Se utiliza Traefik como reverse proxy para gestionar el tráfico y configurar SSL. La configuración se encuentra en el archivo `docker-compose.yml` y define:
 
 - Certificados SSL automáticos con Let's Encrypt
@@ -555,10 +619,13 @@ Se utiliza Traefik como reverse proxy para gestionar el tráfico y configurar SS
 - Enrutamiento basado en prefijos de URL (/v1 para backend)
 
 ## Flujos de Trabajo Principales
+
 Esta sección describe los principales flujos de trabajo de la aplicación para comprender mejor cómo interactúan los diferentes componentes del sistema.
 
 ### Registro y Autenticación de Usuarios
+
 1. **Registro de Usuario**:
+
    - El usuario completa el formulario de registro en el frontend
    - La solicitud es enviada al endpoint `POST /api/users`
    - El backend valida los datos y crea un nuevo registro en la tabla `users`
@@ -566,6 +633,7 @@ Esta sección describe los principales flujos de trabajo de la aplicación para 
    - Se devuelve un token de autenticación y la información del usuario
 
 2. **Inicio de Sesión**:
+
    - El usuario introduce credenciales en el formulario de login
    - El frontend envía la solicitud a `POST /api/auth/login`
    - El backend verifica las credenciales contra la base de datos
@@ -578,13 +646,16 @@ Esta sección describe los principales flujos de trabajo de la aplicación para 
    - El backend valida el token y devuelve los datos actualizados del usuario
 
 ### Creación y Gestión de Torneos
+
 1. **Creación de Torneo**:
+
    - Un usuario administrador crea un torneo mediante el formulario correspondiente
    - El frontend envía los datos a `POST /api/torneos`
    - El backend genera un código único para el torneo y lo almacena en la tabla `torneos`
    - Se devuelve la información del torneo creado, incluyendo el código de acceso
 
 2. **Unirse a un Torneo**:
+
    - El usuario introduce el código del torneo en la aplicación
    - Se realiza una petición a `GET /api/torneos/code/{code_id}` para verificar el torneo
    - Si el torneo existe y está activo, se muestra la información y opción de unirse
@@ -598,7 +669,9 @@ Esta sección describe los principales flujos de trabajo de la aplicación para 
    - Los usuarios pueden ver sus torneos activos con `GET /api/users/{user_id}/torneos`
 
 ### Registro de Acciones
+
 1. **Registrar una Acción**:
+
    - El usuario realiza una actividad y la registra a través de la interfaz
    - Opcionalmente, puede subir una imagen/video como evidencia
    - Si hay multimedia, primero se sube a BunnyStorage
@@ -612,12 +685,15 @@ Esta sección describe los principales flujos de trabajo de la aplicación para 
    - Las imágenes/videos se sirven a través de la CDN de BunnyStorage
 
 ### Sistema de Medallas
+
 1. **Asignación Automática de Medallas**:
+
    - Al registrar acciones, el backend verifica si se cumplen requisitos para medallas
    - Si se cumplen, se asigna automáticamente la medalla al usuario
    - Se marca como pendiente hasta que el usuario la visualice
 
 2. **Asignación Manual**:
+
    - Un administrador puede asignar medallas manualmente
    - Utiliza el endpoint `POST /api/users/{user_id}/medallas/{medalla_id}`
    - El sistema registra la asignación y notifica al usuario
@@ -628,12 +704,15 @@ Esta sección describe los principales flujos de trabajo de la aplicación para 
    - El usuario puede ver los slogans de sus medallas con `GET /api/users/{user_id}/medallas/slogans`
 
 ### Sistema de Amigos
+
 1. **Envío de Solicitud de Amistad**:
+
    - El usuario busca a otro usuario y envía solicitud
    - Se realiza una petición a `POST /api/users/{user_id}/friends/add`
    - El backend registra la solicitud con estado "pendiente"
 
 2. **Aceptación de Solicitud**:
+
    - El usuario recibe notificación de solicitud pendiente
    - Al aceptar, se llama a `PUT /api/users/{user_id}/friends/{friend_id}/accept`
    - El backend actualiza el estado a "aceptada" y crea la relación bidireccional
@@ -644,78 +723,95 @@ Esta sección describe los principales flujos de trabajo de la aplicación para 
    - Se puede filtrar por estado (pendiente/aceptada)
 
 ## Procedimientos de Desarrollo
+
 Esta sección describe los procedimientos recomendados para el desarrollo y mantenimiento del código del proyecto.
 
 ### Configuración del Entorno de Desarrollo
+
 #### Backend (Go)
+
 1. **Requisitos previos**:
+
    - Go 1.20 o superior
    - PostgreSQL 15
    - Git
 
 2. **Configuración inicial**:
+
    ```bash
    # Clonar el repositorio
    git clone https://github.com/tu-organizacion/proyecto-verde.git
    cd proyecto-verde
-   
+
    # Instalar dependencias
    go mod download
-   
+
    # Configurar archivo .env para desarrollo local
    nano .env
    # Editar .env con los valores apropiados
-   
-   # Inicializar la base de datos
-   psql -U postgres -c "CREATE DATABASE proyecto_verde;"
-   psql -U postgres -d proyecto_verde -f db/schema.sql
-   
-   # Ejecutar la aplicación en modo desarrollo
-   go run cmd/api/main.go
+
    ```
+
+# Inicializar la base de datos (solo crear la DB; migraciones corren al iniciar)
+
+psql -U postgres -c "CREATE DATABASE proyecto_verde;"
+
+# Ejecutar la aplicación en modo desarrollo (ejecuta migraciones automáticamente)
+
+go run cmd/api/main.go
+
+````
 
 #### Frontend (Flutter)
 1. **Requisitos previos**:
-   - Flutter SDK (versión estable más reciente)
-   - Dart SDK
-   - Editor (VS Code con extensiones Flutter/Dart recomendado)
+- Flutter SDK (versión estable más reciente)
+- Dart SDK
+- Editor (VS Code con extensiones Flutter/Dart recomendado)
 
 2. **Configuración inicial**:
-   ```bash
-   # Navegar al directorio del frontend
-   cd frontend
-   
-   # Instalar dependencias
-   flutter pub get
-   
-   # Configurar variables de entorno
-   cp .env.example .env
-   # Editar .env con URL del backend local
-   
-   # Ejecutar en modo desarrollo
-   flutter run -d chrome
-   ```
+```bash
+# Navegar al directorio del frontend
+cd frontend
+
+# Instalar dependencias
+flutter pub get
+
+# Configurar variables de entorno
+cp .env.example .env
+# Editar .env con URL del backend local
+
+# Ejecutar en modo desarrollo
+flutter run -d chrome
+````
 
 ### Gestión de Versiones
+
 Se utiliza versionado semántico (SemVer):
+
 - **Mayor (X.0.0)**: Cambios incompatibles con versiones anteriores
 - **Menor (0.X.0)**: Nuevas funcionalidades compatibles con versiones anteriores
 - **Parche (0.0.X)**: Correcciones de errores compatibles con versiones anteriores
 
 ## Integración con Servicios Externos
+
 ### BunnyStorage
+
 La aplicación integra BunnyStorage para el almacenamiento de archivos. La configuración se realiza mediante variables de entorno y se inicializa en `config.InitBunnyStorageClient()`.
 
 BunnyStorage se utiliza principalmente para almacenar:
+
 - Imágenes de perfil de usuario
 - Archivos relacionados con torneos
 - Otros recursos multimedia
 
 ## Seguridad
+
 ### Autenticación y Autorización
+
 El sistema implementa un mecanismo básico de autenticación mediante credenciales de usuario. Las contraseñas se almacenan de forma segura en la base de datos (se recomienda verificar que estén hasheadas).
 
 ### CORS (Cross-Origin Resource Sharing)
+
 La aplicación utiliza el paquete `rs/cors` para configurar CORS y permitir solicitudes desde diferentes orígenes. La configuración actual es:
 
 ```go
@@ -729,6 +825,7 @@ corsOptions := cors.New(cors.Options{
 **Importante para producción**: La configuración actual de CORS permite solicitudes desde cualquier origen (`*`). Para un entorno de producción, se recomienda restringir los orígenes permitidos a dominios específicos.
 
 ### HTTPS
+
 En producción, todo el tráfico HTTP es redirigido automáticamente a HTTPS mediante la configuración de Traefik:
 
 ```yaml
@@ -737,6 +834,7 @@ En producción, todo el tráfico HTTP es redirigido automáticamente a HTTPS med
 ```
 
 ### Certificados SSL
+
 Los certificados SSL son gestionados automáticamente por Traefik utilizando Let's Encrypt:
 
 ```yaml
@@ -746,6 +844,7 @@ Los certificados SSL son gestionados automáticamente por Traefik utilizando Let
 ```
 
 ### Recomendaciones de Seguridad Adicionales
+
 Para mejorar la seguridad del sistema en producción, se recomienda:
 
 1. Implementar rate limiting para prevenir ataques de fuerza bruta
@@ -756,7 +855,9 @@ Para mejorar la seguridad del sistema en producción, se recomienda:
 6. Revisar y rotar regularmente las claves de API de BunnyStorage
 
 ## Mantenimiento
+
 ### Monitorización
+
 Para monitorizar el estado del sistema, se recomienda:
 
 1. Implementar un sistema de monitorización como Prometheus con Grafana
@@ -764,6 +865,7 @@ Para monitorizar el estado del sistema, se recomienda:
 3. Monitorizar los logs del sistema utilizando Loki o un sistema similar
 
 ### Logs
+
 La aplicación genera logs utilizando el paquete `log` estándar de Go. Se recomienda:
 
 1. Configurar un sistema de centralización de logs como ELK Stack o Graylog
@@ -771,6 +873,7 @@ La aplicación genera logs utilizando el paquete `log` estándar de Go. Se recom
 3. Configurar alertas basadas en patrones de logs para detectar problemas
 
 ### Respaldos
+
 Para la base de datos PostgreSQL, se recomienda:
 
 1. Configurar respaldos diarios automáticos
@@ -783,6 +886,7 @@ pg_dump -U postgres -d proyecto_verde > backup_$(date +%Y%m%d).sql
 ```
 
 ### Actualizaciones
+
 Para actualizar el sistema a una nueva versión:
 
 1. Realizar pruebas en un entorno de staging
@@ -799,6 +903,7 @@ docker-compose up -d
 ```
 
 ### Escalabilidad
+
 Para escalar el sistema ante mayor carga:
 
 1. Escalar horizontalmente el servicio backend
@@ -807,15 +912,19 @@ Para escalar el sistema ante mayor carga:
 4. Optimizar consultas de base de datos
 
 ## Solución de Problemas Comunes
+
 ### Problemas de Conexión a la Base de Datos
+
 Si la aplicación no puede conectarse a la base de datos:
 
 1. Verificar que el servicio de PostgreSQL esté en ejecución
+
    ```bash
    docker-compose ps postgres
    ```
 
 2. Verificar la configuración de conexión en el archivo `.env`
+
    ```bash
    cat .env | grep DB_
    ```
@@ -826,14 +935,17 @@ Si la aplicación no puede conectarse a la base de datos:
    ```
 
 ### Problemas con Traefik
+
 Si hay problemas con el proxy:
 
 1. Verificar los logs de Traefik
+
    ```bash
    docker-compose logs reverse-proxy
    ```
 
 2. Comprobar que los puertos 80 y 443 estén disponibles
+
    ```bash
    netstat -tulpn | grep -E '80|443'
    ```
@@ -842,14 +954,17 @@ Si hay problemas con el proxy:
    (accesible en http://your-server-ip:8080 si está configurado)
 
 ### Errores en el Servicio Backend
+
 Si el servicio backend presenta errores:
 
 1. Verificar los logs del servicio
+
    ```bash
    docker-compose logs backend
    ```
 
 2. Comprobar la conectividad con BunnyStorage
+
    ```bash
    curl -I https://storage.bunnycdn.com/
    ```
@@ -860,14 +975,17 @@ Si el servicio backend presenta errores:
    ```
 
 ### Problemas con los Certificados SSL
+
 Si hay problemas con los certificados SSL:
 
 1. Verificar que el dominio apunta correctamente al servidor
+
    ```bash
    dig vive.integra-expansion.com
    ```
 
 2. Revisar los logs de Traefik para errores de Let's Encrypt
+
    ```bash
    docker-compose logs reverse-proxy | grep "acme"
    ```
@@ -878,6 +996,7 @@ Si hay problemas con los certificados SSL:
    ```
 
 ### Problemas de Permisos en BunnyStorage
+
 Si hay problemas al subir archivos a BunnyStorage:
 
 1. Verificar las claves de API en el archivo `.env`
@@ -886,9 +1005,11 @@ Si hay problemas al subir archivos a BunnyStorage:
 4. Revisar los logs de la aplicación para errores específicos relacionados con BunnyStorage
 
 ## Configuración para Producción
+
 Para preparar el sistema para producción, se deben realizar los siguientes cambios:
 
 ### 1. Configuración de Variables de Entorno
+
 Crear un archivo `.env` para producción con valores seguros:
 
 ```
@@ -908,6 +1029,7 @@ BUNNYNET_PULL_ZONE=cdn.integra-expansion.com
 ```
 
 ### 2. Configuración de CORS
+
 Modificar la configuración de CORS en `cmd/api/main.go`:
 
 ```go
@@ -919,6 +1041,7 @@ corsOptions := cors.New(cors.Options{
 ```
 
 ### 3. Configuración de Docker Compose
+
 Asegurarse de que el archivo `docker-compose.yml` esté configurado correctamente para producción, especialmente:
 
 - Verificar los volúmenes para persistencia de datos
@@ -926,6 +1049,7 @@ Asegurarse de que el archivo `docker-compose.yml` esté configurado correctament
 - Asegurar que los directorios de montaje existan y tengan permisos adecuados
 
 ### 4. Configuración de Traefik
+
 Verificar la configuración de Traefik en `docker-compose.yml`:
 
 - Configurar correctamente el correo electrónico para Let's Encrypt
@@ -933,10 +1057,12 @@ Verificar la configuración de Traefik en `docker-compose.yml`:
 - Asegurar que las redes estén correctamente definidas
 
 ### 5. Seguridad de BunnyStorage
+
 Verificar la configuración de seguridad en BunnyStorage:
 
 - Limitar el acceso a la zona de almacenamiento
 - Configurar CORS en el lado de BunnyStorage
 
 ## Consideraciones Finales
+
 Este manual técnico debe ser actualizado regularmente conforme el sistema evoluciona. Se recomienda revisar y actualizar la documentación al menos después de cada despliegue importante o cambio significativo en la arquitectura.
