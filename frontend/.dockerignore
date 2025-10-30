@@ -1,0 +1,5 @@
+# Evita que estos archivos terminen en /usr/share/nginx/html
+Dockerfile
+.dockerignore
+deploy.py
+# (agrega aquí cualquier otro archivo que no deba servirse públicamente)
